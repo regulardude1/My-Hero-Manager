@@ -1,6 +1,4 @@
-![My Hero Manager Banner](./banner.png)
-
-# 🦸‍♂️ My Hero Manager
+# My Hero Manager
 
 > [!IMPORTANT]
 > 🚧 **Work In Progress**: This project is currently under active development. Many features are in an experimental state or are being actively implemented.
@@ -11,12 +9,12 @@ A high-performance, intelligent mod manager for **My Hero Ultra Rumble**. Built 
 
 ## ✨ Key Features
 
-- **🧠 Mod Intelligence**: Automatically scans and categorizes mods into Skins, Emotes, and Voices using deep-dive analysis.
-- **🌐 Discord Mod Store**: Integrated scraper to browse, search, and download the latest community mods directly from Discord archives.
-- **🔍 Deep Search**: A powerful global search system to find specific mods or character-related content instantly.
-- **⚡ Performance First**: Optimized for low RAM usage and stability, ensuring the manager doesn't slow down your system.
-- **📁 Organized Management**: Easily enable or disable mods, with an automated directory structure that keeps your game files clean.
-- **🖼️ 3D Preview (Upcoming)**: Support for viewing character models and modded assets before installation.
+- ** Mod Intelligence**: Automatically scans and categorizes mods into Skins, Emotes, and Voices using deep-dive analysis.
+- ** Discord Mod Store**: Integrated scraper to browse, search, and download the latest community mods directly from Discord archives.
+- ** Deep Search**: A powerful global search system to find specific mods or character-related content instantly.
+- ** Performance First**: Optimized for low RAM usage and stability, ensuring the manager doesn't slow down your system.
+- ** Organized Management**: Easily enable or disable mods, with an automated directory structure that keeps your game files clean.
+- ** 3D Preview (Upcoming)**: Support for viewing character models and modded assets before installation.
 
 ---
 
@@ -29,7 +27,7 @@ A high-performance, intelligent mod manager for **My Hero Ultra Rumble**. Built 
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 - [Node.js](https://nodejs.org/) (Latest LTS)
