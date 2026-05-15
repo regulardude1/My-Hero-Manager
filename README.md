@@ -2,6 +2,9 @@
 
 # 🦸‍♂️ My Hero Manager
 
+> [!IMPORTANT]
+> 🚧 **Work In Progress**: This project is currently under active development. Many features are in an experimental state or are being actively implemented.
+
 A high-performance, intelligent mod manager for **My Hero Ultra Rumble**. Built with efficiency and user experience in mind, this tool streamlines the process of discovering, downloading, and organizing your game modifications.
 
 ---
