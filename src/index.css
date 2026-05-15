@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-hero-bg: #09090b;       /* Very dark zinc */
+  --color-hero-sidebar: #18181b;  /* Dark zinc for sidebar */
+  --color-hero-card: #27272a;     /* Lighter zinc for cards */
+  --color-hero-primary: #facc15;  /* Vibrant Yellow (Plus Ultra!) */
+  --color-hero-primaryHover: #eab308;
+  --color-hero-accent: #3b82f6;   /* Hero Blue */
+  --color-hero-accentHover: #2563eb;
+  --color-hero-danger: #ef4444;   /* Bakugo Red */
+  --color-hero-text: #fafafa;
+  --color-hero-muted: #a1a1aa;
+}
+
+@layer base {
+  body {
+    background-color: var(--color-hero-bg);
+    color: var(--color-hero-text);
+    margin: 0;
+    overflow: hidden;
+  }
+}
+
+/* Custom scrollbar for webkit */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-hero-card);
+  border-radius: 4px;
+  border: 1px solid var(--color-hero-bg);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-hero-primary);
+}
