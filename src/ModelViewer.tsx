@@ -7,8 +7,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as THREE from 'three';
 
 // Error boundary to catch Three.js/WebGL crashes
-class ViewerErrorBoundary extends Component<{children: ReactNode}, {hasError: boolean, error: string}> {
-  constructor(props: {children: ReactNode}) {
+class ViewerErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: string }> {
+  constructor(props: { children: ReactNode }) {
     super(props);
     this.state = { hasError: false, error: '' };
   }
@@ -22,7 +22,7 @@ class ViewerErrorBoundary extends Component<{children: ReactNode}, {hasError: bo
           <div className="text-4xl mb-4">⚠️</div>
           <h3 className="text-lg font-black text-white mb-2">3D VIEWER ERROR</h3>
           <p className="text-xs text-hero-muted max-w-xs">{this.state.error}</p>
-          <button 
+          <button
             onClick={() => this.setState({ hasError: false, error: '' })}
             className="mt-4 px-4 py-2 bg-hero-primary/20 border border-hero-primary/30 text-hero-primary text-xs font-bold rounded-sm hover:bg-hero-primary/30 transition-colors"
           >
@@ -68,7 +68,7 @@ function LoadingSpinner() {
 // Renders a loaded GLTF scene perfectly centered and uniformly scaled, ignoring invisible bones
 function LoadedModel({ scene }: { scene: THREE.Group }) {
   const clonedScene = scene.clone(true);
-  
+
   // Force update world matrices so bounding boxes are accurate
   clonedScene.updateMatrixWorld(true);
 
@@ -76,7 +76,7 @@ function LoadedModel({ scene }: { scene: THREE.Group }) {
   const box = new THREE.Box3();
   box.makeEmpty();
   clonedScene.traverse((child: any) => {
-    if (child.isMesh || child.isSkinnedMesh) {
+    if ((child.isMesh || child.isSkinnedMesh) && child.visible) {
       const meshBox = new THREE.Box3().setFromObject(child);
       box.union(meshBox);
     }
@@ -90,15 +90,15 @@ function LoadedModel({ scene }: { scene: THREE.Group }) {
   // 2. Get true center and dimensions
   const center = box.getCenter(new THREE.Vector3());
   const size = box.getSize(new THREE.Vector3());
-  
+
   // 3. Normalize scale so the largest dimension (usually height) is exactly 3.5 units
   const maxDim = Math.max(size.x, size.y, size.z);
   const scale = maxDim > 0 ? 3.5 / maxDim : 1.0;
 
-  // 4. Wrap in a group that shifts the model to (0,0,0) before scaling it
+  // 4. Wrap in a group that shifts the model vertically to center it, but respects original X/Z origin
   return (
     <group scale={scale}>
-      <group position={[-center.x, -center.y, -center.z]}>
+      <group position={[0, -center.y, 0]}>
         <primitive object={clonedScene} />
       </group>
     </group>
@@ -135,18 +135,22 @@ export default function ModelViewer({ selectedMod }: { selectedMod: any }) {
         if (extractionRef.current !== thisId) return;
 
         setStatus('loading');
-        
-        // Convert to asset URL
-        const assetUrl = convertFileSrc(gltfPath);
-        
-        // Get the directory URL so GLTFLoader can resolve relative .bin files
-        const lastSlash = assetUrl.lastIndexOf('/');
-        const dirUrl = assetUrl.substring(0, lastSlash + 1);
-        
+
+        // Normalize path separators
+        const normalizedPath = gltfPath.replace(/\\/g, '/');
+
+        // Extract the directory path before conversion to preserve correct slashes
+        const lastSlash = normalizedPath.lastIndexOf('/');
+        const dirPath = normalizedPath.substring(0, lastSlash + 1);
+
+        // Convert both the file path and the directory path to safe Tauri asset URLs
+        const assetUrl = convertFileSrc(normalizedPath);
+        const dirUrl = convertFileSrc(dirPath);
+
         const loader = new GLTFLoader();
-        // Set the resource path so .bin buffers are loaded from the same directory
+        // Set the resource path so .bin buffers are loaded from the correct directory URL
         loader.setResourcePath(dirUrl);
-        
+
         console.log("[ModelViewer] Loading GLTF from:", assetUrl);
         console.log("[ModelViewer] Resource path:", dirUrl);
 
@@ -154,21 +158,21 @@ export default function ModelViewer({ selectedMod }: { selectedMod: any }) {
           assetUrl,
           (gltf) => {
             if (extractionRef.current !== thisId) return;
-            
+
             // Fix materials: UE4 often packs weird data in vertex colors which look like bright green/pink.
             // If the mod didn't include custom textures (reusing base game ones), we'll make it look like a nice clay render.
             gltf.scene.traverse((child: any) => {
               if (child.isMesh && child.material) {
                 const processMaterial = (mat: any) => {
                   mat.vertexColors = false; // Disable ugly vertex colors
-                  
+
                   // If there is no texture map, make it a nice flat "clay" material
                   if (!mat.map) {
                     mat.color.setHex(0xe5e7eb); // Light gray clay
                     mat.roughness = 0.8;
                     mat.metalness = 0.1;
                   }
-                  
+
                   // Fix transparent materials sometimes rendering weirdly
                   if (mat.transparent) {
                     mat.alphaTest = 0.5;
@@ -183,16 +187,16 @@ export default function ModelViewer({ selectedMod }: { selectedMod: any }) {
                 }
               }
             });
-            
+
             setLoadedScene(gltf.scene);
             setStatus('ready');
           },
           undefined,
-          (err) => {
+          (err: any) => {
             if (extractionRef.current !== thisId) return;
             console.error("GLTF load error:", err);
             setStatus('error');
-            setErrorMsg('Failed to parse 3D model');
+            setErrorMsg('Failed to parse 3D model: ' + (err.message || String(err)));
           }
         );
       })
@@ -216,57 +220,57 @@ export default function ModelViewer({ selectedMod }: { selectedMod: any }) {
 
   return (
     <ViewerErrorBoundary>
-    <div className="w-full h-full relative overflow-hidden">
-      <Canvas
-        shadows
-        gl={{ alpha: true, antialias: true }}
-        camera={{ position: [0, 0, 5], fov: 45 }}
-        style={{ width: '100%', height: '100%' }}
-        onCreated={({ gl }) => {
-          gl.setClearColor(0x000000, 0);
-        }}
-      >
-        <ambientLight intensity={0.6} />
-        <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={2} castShadow />
-        <pointLight position={[-10, -10, -10]} intensity={1} color="#facc15" />
-        <directionalLight position={[5, 5, 5]} intensity={0.5} />
+      <div className="w-full h-full relative overflow-hidden">
+        <Canvas
+          shadows
+          gl={{ alpha: true, antialias: true }}
+          camera={{ position: [0, 0, 5], fov: 45 }}
+          style={{ width: '100%', height: '100%' }}
+          onCreated={({ gl }) => {
+            gl.setClearColor(0x000000, 0);
+          }}
+        >
+          <ambientLight intensity={0.6} />
+          <spotLight position={[10, 10, 10]} angle={0.15} penumbra={1} intensity={2} castShadow />
+          <pointLight position={[-10, -10, -10]} intensity={1} color="#facc15" />
+          <directionalLight position={[5, 5, 5]} intensity={0.5} />
 
-        <Suspense fallback={null}>
-          {status === 'ready' && loadedScene ? (
-            <LoadedModel scene={loadedScene} />
-          ) : status === 'extracting' || status === 'loading' ? (
-            <LoadingSpinner />
-          ) : (
-            <AbstractPlaceholder />
-          )}
-          <Environment preset="city" />
-          <ContactShadows position={[0, -1.75, 0]} opacity={0.5} scale={10} blur={2.5} far={4} />
-        </Suspense>
+          <Suspense fallback={null}>
+            {status === 'ready' && loadedScene ? (
+              <LoadedModel scene={loadedScene} />
+            ) : status === 'extracting' || status === 'loading' ? (
+              <LoadingSpinner />
+            ) : (
+              <AbstractPlaceholder />
+            )}
+            <Environment preset="city" />
+            <ContactShadows position={[0, -1.75, 0]} opacity={0.5} scale={10} blur={2.5} far={4} />
+          </Suspense>
 
-        <OrbitControls
-          makeDefault
-          target={[0, 0, 0]}
-          enablePan={true}
-          minPolarAngle={0}
-          maxPolarAngle={Math.PI}
-          autoRotate={status === 'ready'}
-          autoRotateSpeed={1.5}
-          enableZoom={true}
-        />
-      </Canvas>
+          <OrbitControls
+            makeDefault
+            target={(status === 'ready' && loadedScene) ? [0, 1.0, 0] : [0, 0, 0]}
+            enablePan={true}
+            minPolarAngle={0}
+            maxPolarAngle={Math.PI}
+            autoRotate={status === 'ready'}
+            autoRotateSpeed={1.5}
+            enableZoom={true}
+          />
+        </Canvas>
 
-      {/* Bottom overlay */}
-      <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
-        <div className="bg-black/70 backdrop-blur-md border border-white/10 rounded-sm p-3">
-          <h3 className="text-lg font-black italic text-white truncate">
-            {selectedMod ? selectedMod.name : "NO MOD SELECTED"}
-          </h3>
-          <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${status === 'error' ? 'text-red-400' : 'text-hero-primary'}`}>
-            {statusText()}
-          </p>
+        {/* Bottom overlay */}
+        <div className="absolute bottom-4 left-4 right-4 pointer-events-none">
+          <div className="bg-black/70 backdrop-blur-md border border-white/10 rounded-sm p-3">
+            <h3 className="text-lg font-black italic text-white truncate">
+              {selectedMod ? selectedMod.name : "NO MOD SELECTED"}
+            </h3>
+            <p className={`text-xs font-bold uppercase tracking-widest mt-1 ${status === 'error' ? 'text-red-400' : 'text-hero-primary'}`}>
+              {statusText()}
+            </p>
+          </div>
         </div>
       </div>
-    </div>
     </ViewerErrorBoundary>
   );
 }

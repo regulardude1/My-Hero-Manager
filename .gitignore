@@ -31,3 +31,10 @@ test.pdb
 reference/
 tools/427_MyHeroUltraRumble_23_03_26.usmap
 
+
+src-tauri/cache/
+tools/__pycache__/
+tools/build/
+temp_gb.json
+
+tools/ffmpeg.exe
