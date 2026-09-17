@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback, useRef, memo } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { X, LogIn, Download, ExternalLink, Search, RefreshCw, LogOut, ChevronDown, Check, Filter } from "lucide-react";
+import { X, LogIn, Download, ExternalLink, Search, RefreshCw, LogOut, ChevronDown, Check, Filter, Info, Gamepad2 } from "lucide-react";
 
 // ── Types ────────────────────────────────────────────────────────────────────────────────
 interface RawThread {
@@ -18,11 +18,15 @@ interface DiscordMod {
   id: string;
   title: string;
   thumbnail: string | null;
-  links: string[];
+  links: any[]; // Changed from string[] to any[] to support {url, date} objects and legacy strings
   author: string;
   content: string;
+  authorId?: string;
   tags: string[];
-  channel_id: string;
+  createdAt?: number;
+  lastMessageAt?: number;
+  channel_id?: string;
+  _thumbChecked?: boolean;
 }
 
 interface ChannelData {
@@ -72,10 +76,15 @@ function processMessages(thread: RawThread, msgs: any[], channelTags: Record<str
   const chronoMsgs = [...msgs].reverse();
   const opId = thread.owner_id ?? chronoMsgs[0]?.author?.id;
   let thumbnail: string | null = null;
-  const links: string[] = [];
+  const links: any[] = [];
   const seen = new Set<string>();
 
-  const addLink = (l: string) => { if (!seen.has(l)) { seen.add(l); links.push(l); } };
+  const addLink = (l: string, timestamp?: string) => { 
+    if (!seen.has(l)) { 
+      seen.add(l); 
+      links.push(timestamp ? { url: l, date: timestamp } : l); 
+    } 
+  };
 
   const opMsg = chronoMsgs.find(m => m.author?.id === opId) || chronoMsgs[0];
 
@@ -137,13 +146,13 @@ function processMessages(thread: RawThread, msgs: any[], channelTags: Record<str
       const lo = u.toLowerCase();
       const isArch = /\.(pak|zip|rar|7z)(\?|$)/.test(lo.split("?")[0]);
       const isHost = Object.keys(DOMAIN_LABELS).some(h => lo.includes(h));
-      if (isArch || isHost) addLink(u);
+      if (isArch || isHost) addLink(u, m.timestamp || new Date(Number(BigInt(m.id) >> 22n) + 1420070400000).toISOString());
     }
     for (const a of m.attachments ?? []) {
       const urlMatches = /\.(pak|zip|rar|7z)(\?|$)/i.test(a.url.split("?")[0]);
       const nameMatches = /\.(pak|zip|rar|7z)$/i.test(a.filename ?? "");
       if (urlMatches || nameMatches) {
-        addLink(a.url);
+        addLink(a.url, m.timestamp || new Date(Number(BigInt(m.id) >> 22n) + 1420070400000).toISOString());
       }
     }
   }
@@ -215,24 +224,24 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="relative w-full max-w-md mx-4 bg-gradient-to-br from-[#1a1a2e] to-[#0d0d1a] border border-white/10 rounded-2xl shadow-2xl p-8">
-        <button onClick={onCancel} className="absolute top-4 right-4 text-white/40 hover:text-white transition-colors"><X size={20}/></button>
+      <div className="relative w-full max-w-md mx-4 bg-gradient-to-br from-hero-sidebar to-hero-bg border border-hero-border rounded-2xl shadow-2xl p-8">
+        <button onClick={onCancel} className="absolute top-4 right-4 text-hero-muted hover:text-hero-text transition-colors"><X size={20}/></button>
         <div className="flex items-center gap-3 mb-6">
-          <div className="w-12 h-12 rounded-full bg-[#5865F2] flex items-center justify-center text-white text-2xl font-black">D</div>
+          <div className="w-12 h-12 rounded-full bg-[#5865F2] flex items-center justify-center text-hero-text text-2xl font-black">D</div>
           <div>
-            <h2 className="text-xl font-black text-white">Discord Login</h2>
-            <p className="text-xs text-white/40">Securely sign in via Discord</p>
+            <h2 className="text-xl font-black text-hero-text">Discord Login</h2>
+            <p className="text-xs text-hero-muted">Securely sign in via Discord</p>
           </div>
         </div>
 
-        <div className="mb-4 text-sm text-white/70">
+        <div className="mb-4 text-sm text-hero-textSecondary">
           <strong>Option 1:</strong> Automatically securely extract your token via a login window.
         </div>
 
         <button
           onClick={handleOpenLogin}
           disabled={loading}
-          className="w-full flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white font-bold py-3 rounded-lg transition-all duration-200"
+          className="w-full flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-hero-text font-bold py-3 rounded-lg transition-all duration-200"
         >
           <LogIn size={16}/>
           {loading ? "Waiting for sign in..." : "Open Browser Login"}
@@ -240,12 +249,12 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
 
         <div className="flex items-center my-6 gap-3">
           <div className="flex-1 h-px bg-white/10"></div>
-          <span className="text-xs text-white/40 font-bold uppercase tracking-widest">OR</span>
+          <span className="text-xs text-hero-muted font-bold uppercase tracking-widest">OR</span>
           <div className="flex-1 h-px bg-white/10"></div>
         </div>
 
         <div className="mb-4">
-          <label className="text-xs font-bold text-white/60 uppercase tracking-wider mb-2 block">Option 2: Manual Token</label>
+          <label className="text-xs font-bold text-hero-text/60 uppercase tracking-wider mb-2 block">Option 2: Manual Token</label>
           <div className="flex gap-2">
             <input
               type="password"
@@ -253,24 +262,24 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
               onChange={e => setManualToken(e.target.value)}
               onKeyDown={e => e.key === "Enter" && handleManualSubmit()}
               placeholder="Paste your token here..."
-              className="flex-1 bg-black/40 border border-white/10 text-white text-sm px-4 py-2.5 rounded-lg outline-none focus:border-[#5865F2] transition-colors placeholder:text-white/20"
+              className="flex-1 bg-black/40 border border-hero-border text-hero-text text-sm px-4 py-2.5 rounded-lg outline-none focus:border-[#5865F2] transition-colors placeholder:text-hero-text/20"
             />
             <button
               onClick={handleManualSubmit}
               disabled={loading || !manualToken.trim()}
-              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-white font-bold rounded-lg transition-all text-sm whitespace-nowrap"
+              className="px-4 py-2.5 bg-white/10 hover:bg-white/20 disabled:opacity-50 text-hero-text font-bold rounded-lg transition-all text-sm whitespace-nowrap"
             >
               Verify
             </button>
           </div>
-          <p className="mt-2 text-[10px] text-white/30 leading-relaxed">
+          <p className="mt-2 text-[10px] text-hero-text/30 leading-relaxed">
             Find it in Browser DevTools (F12) → Network → Filter "api" → Request Headers → "Authorization".
           </p>
         </div>
 
         {error && <div className="mt-4 p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-red-400 text-xs">{error}</div>}
 
-        <p className="mt-4 text-center text-xs text-white/30">
+        <p className="mt-4 text-center text-xs text-hero-text/30">
           Your token is encrypted before being saved to disk.
         </p>
       </div>
@@ -293,7 +302,7 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
 
   useEffect(() => {
     if (!expanded) return;
-    const gbLinks = mod.links.filter(l => l.includes("gamebanana.com/mods/"));
+    const gbLinks = mod.links.filter(l => (typeof l === 'string' ? l : l.url).includes("gamebanana.com/mods/"));
     if (gbLinks.length === 0 || gbFiles.length > 0) return;
 
     let isMounted = true;
@@ -301,8 +310,9 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
       setLoadingGb(true);
       const fetched: {url: string, label: string}[] = [];
       try {
-        for (const link of gbLinks) {
-          const m = link.match(/gamebanana\.com\/mods\/(\d+)/i);
+        for (const linkObj of gbLinks) {
+          const urlStr = typeof linkObj === 'string' ? linkObj : linkObj.url;
+          const m = urlStr.match(/gamebanana\.com\/mods\/(\d+)/i);
           if (!m) continue;
           const id = m[1];
           const res = await fetch(`https://api.gamebanana.com/Core/Item/Data?itemtype=Mod&itemid=${id}&fields=name,Files().aFiles()`);
@@ -328,17 +338,42 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
   const typeTags = mod.tags.filter(t => TYPE_TAGS.has(t.toLowerCase()));
   const charTags = mod.tags.filter(t => !TYPE_TAGS.has(t.toLowerCase()));
   
-  const checkIsDownloaded = (url: string) => {
-    if (downloadedUrls.has(url)) return true;
-    if (localMods && localMods.some(m => m.url === url)) return true;
+  const getBaseUrl = (u: string) => {
     try {
-      const filename = decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
-      if (filename && localMods.some(m => m.pak_name && (m.pak_name === filename || m.pak_name.replace(/_$/, '') === filename))) return true;
-    } catch {}
+      const parsed = new URL(u);
+      return parsed.origin + parsed.pathname;
+    } catch { return u; }
+  };
+
+  const checkIsDownloaded = (url: string) => {
+    const baseUrl = getBaseUrl(url);
+    if (Array.from(downloadedUrls).some(u => getBaseUrl(u) === baseUrl)) return true;
+    
+    if (localMods) {
+      if (localMods.some(m => m.url && getBaseUrl(m.url) === baseUrl)) return true;
+      try {
+        const filename = decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
+        if (filename) {
+          const matches = localMods.some(m => {
+            if (!m.pak_name) return false;
+            const matchName = m.pak_name === filename || m.pak_name.replace(/_$/, '') === filename;
+            if (!matchName) return false;
+            if (m.url && (m.url.includes("discordapp.com") || m.url.includes("discordapp.net"))) {
+              return getBaseUrl(m.url) === baseUrl;
+            }
+            return true;
+          });
+          if (matches) return true;
+        }
+      } catch {}
+    }
     return false;
   };
   
-  const isModDownloaded = mod.links.some(url => checkIsDownloaded(url));
+  const isModDownloaded = mod.links.some(linkObj => {
+    const url = typeof linkObj === 'string' ? linkObj : linkObj.url;
+    return checkIsDownloaded(url);
+  });
 
   const handleDownload = async (url: string, explicitFileName?: string) => {
     setDownloading(url);
@@ -365,31 +400,33 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
 
   return (
     <div 
-      className="bg-hero-card/60 border border-white/5 rounded-xl overflow-hidden hover:border-[#5865F2]/40 transition-all duration-300 flex flex-col"
+      className="bg-hero-card border border-hero-border rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-1 hover:border-[#5865F2]/40 transition-all duration-300 flex flex-col"
     >
       <div className="relative w-full aspect-video bg-black/40">
         {mod.thumbnail && !imgError ? (
           <img src={mod.thumbnail} alt={mod.title} loading="lazy" className="w-full h-full object-cover" onError={() => setImgError(true)}/>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/20 text-4xl">🎮</div>
+          <div className="w-full h-full flex items-center justify-center text-hero-text/20 text-4xl">
+            <Gamepad2 className="w-12 h-12 opacity-50"/>
+          </div>
         )}
         {typeTags.length > 0 && (
           <div className="absolute top-2 left-2 flex gap-1">
             {typeTags.map(t => (
-              <span key={t} className="px-2 py-0.5 bg-[#5865F2]/80 text-white text-[10px] font-bold rounded-full backdrop-blur-sm">{t}</span>
+              <span key={t} className="px-2 py-0.5 bg-[#5865F2]/80 text-hero-text text-[10px] font-bold rounded-full backdrop-blur-sm">{t}</span>
             ))}
           </div>
         )}
       </div>
 
       <div className="p-4 flex flex-col flex-1 gap-2">
-        <h3 className="font-bold text-white text-sm leading-tight line-clamp-2">{mod.title}</h3>
-        <p className="text-xs text-white/40">by <span className="text-white/60">{mod.author}</span></p>
+        <h3 className="font-bold text-hero-text text-sm leading-tight line-clamp-2">{mod.title}</h3>
+        <p className="text-xs text-hero-muted">by <span className="text-hero-text/60">{mod.author}</span></p>
 
         {charTags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {charTags.map(t => (
-              <span key={t} className="px-2 py-0.5 bg-white/5 text-[#a0c4ff] text-[10px] rounded-full border border-white/10">👤 {t}</span>
+              <span key={t} className="px-2 py-0.5 bg-hero-surface text-[#a0c4ff] text-[10px] rounded-full border border-hero-border">👤 {t}</span>
             ))}
           </div>
         )}
@@ -397,14 +434,14 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
         {isModDownloaded ? (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="mt-auto w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-white text-xs font-bold py-2 rounded-lg transition-all"
+            className="mt-auto w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-hero-text text-xs font-bold py-2 rounded-lg transition-all"
           >
             ✅ Downloaded
           </button>
         ) : (
           <button
             onClick={() => setExpanded(!expanded)}
-            className="mt-auto w-full flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] text-white text-xs font-bold py-2 rounded-lg transition-all"
+            className="mt-auto w-full flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] text-hero-text text-xs font-bold py-2 rounded-lg transition-all"
           >
             <Download size={12}/>
             {mod.links.length > 0 ? `${mod.links.length} Download${mod.links.length > 1 ? "s" : ""}` : "View Thread"}
@@ -414,9 +451,11 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
         {expanded && (
           <div className="mt-2 space-y-1.5">
             {mod.links.length === 0 && (
-              <p className="text-xs text-white/40 text-center py-2">No direct download links found</p>
+              <p className="text-xs text-hero-muted text-center py-2">No direct download links found</p>
             )}
-            {mod.links.map((url, i) => {
+            {mod.links.map((linkObj, i) => {
+              const url = typeof linkObj === 'string' ? linkObj : linkObj.url;
+              const dateStr = typeof linkObj === 'object' && linkObj.date ? new Date(linkObj.date).toLocaleString() : "";
               if (url.includes("gamebanana.com/mods/")) return null;
               const direct = isDirect(url);
               const label = linkLabel(url);
@@ -426,22 +465,30 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
                 <button
                   key={i}
                   disabled={isLoading}
+                  title={dateStr ? `Posted: ${dateStr}` : undefined}
                   onClick={() => direct ? handleDownload(url) : window.open(url, "_blank")}
                   className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
                     ${direct 
                         ? (isDownloaded 
                             ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border border-blue-600/50" 
                             : "bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/20")
-                        : "bg-white/5 hover:bg-white/10 text-white/70 border border-white/10"}`}
+                        : "bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border"}`}
                 >
                   {direct ? <Download size={12}/> : <ExternalLink size={12}/>}
-                  <span className="truncate flex-1 text-left">{isLoading ? "Installing..." : (direct ? `⬇ ${label}` : label)}</span>
-                  {isDownloaded && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300">Installed</span>}
+                  <span className="truncate flex-1 text-left pr-2">
+                    {isLoading ? "Installing..." : label} 
+                  </span>
+                  {(true) && (
+                    <div title={dateStr ? `Posted: ${dateStr}` : `No Date Found`} className="flex items-center text-blue-300 hover:text-hero-text transition-colors">
+                      <Info size={14} />
+                    </div>
+                  )}
+                  {isDownloaded && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300 ml-2">Installed</span>}
                 </button>
               );
             })}
             
-            {loadingGb && <p className="text-xs text-white/40 text-center py-2">Loading GameBanana files...</p>}
+            {loadingGb && <p className="text-xs text-hero-muted text-center py-2">Loading GameBanana files...</p>}
             
             {gbFiles.map((f, i) => {
               const url = f.url;
@@ -488,7 +535,7 @@ function isDiscordUrlExpired(url?: string): boolean {
 
 function loadModsFromCache(guildId: string, nsfw: boolean): { mods: DiscordMod[]; tags: string[] } | null {
   try {
-    const key = `discord_store_${guildId}_${nsfw ? 'nsfw' : 'sfw'}`;
+    const key = `discord_store_v3_${guildId}_${nsfw ? 'nsfw' : 'sfw'}`;
     const stored = localStorage.getItem(key);
     if (stored) {
       const parsed = JSON.parse(stored);
@@ -500,7 +547,7 @@ function loadModsFromCache(guildId: string, nsfw: boolean): { mods: DiscordMod[]
 
 function saveModsToCache(guildId: string, mods: DiscordMod[], tags: string[], nsfw: boolean) {
   try {
-    const key = `discord_store_${guildId}_${nsfw ? 'nsfw' : 'sfw'}`;
+    const key = `discord_store_v3_${guildId}_${nsfw ? 'nsfw' : 'sfw'}`;
     localStorage.setItem(key, JSON.stringify({ mods, tags, timestamp: Date.now() }));
   } catch {
     try {
@@ -510,7 +557,7 @@ function saveModsToCache(guildId: string, mods: DiscordMod[], tags: string[], ns
         if (k?.startsWith('mod_')) toRemove.push(k);
       }
       toRemove.forEach(k => localStorage.removeItem(k));
-      const key2 = `discord_store_${guildId}_${nsfw ? 'nsfw' : 'sfw'}`;
+      const key2 = `discord_store_v3_${guildId}_${nsfw ? 'nsfw' : 'sfw'}`;
       localStorage.setItem(key2, JSON.stringify({ mods, tags, timestamp: Date.now() }));
     } catch {}
   }
@@ -734,12 +781,20 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
             });
             if (msgs && msgs.length > 0 && !isCancelled()) {
               const freshMod = processMessages(thread, msgs, channelTags);
-              const threadCacheKey = `mod_v2_${thread.id}_${thread.last_message_id}`;
+              freshMod._thumbChecked = true;
+              const threadCacheKey = `mod_v4_${thread.id}_${thread.last_message_id}`;
               try { localStorage.setItem(threadCacheKey, JSON.stringify(freshMod)); } catch {}
               setAllMods(prev => {
                 const next = [...prev];
                 const idx = next.findIndex(m => m.id === freshMod.id);
                 if (idx >= 0) next[idx] = freshMod;
+                return next;
+              });
+            } else if (!isCancelled()) {
+              setAllMods(prev => {
+                const next = [...prev];
+                const idx = next.findIndex(m => m.id === thread.id);
+                if (idx >= 0) next[idx] = { ...next[idx], thumbnail: null };
                 return next;
               });
             }
@@ -749,9 +804,17 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
             const msg = String(e).toLowerCase();
             if (msg.includes("rate") || msg.includes("429")) {
               await new Promise(r => setTimeout(r, 5000));
-            } else {
-              refetchQueue.shift();
+              continue; // Retry the same item!
             }
+            if (!isCancelled()) {
+              setAllMods(prev => {
+                const next = [...prev];
+                const idx = next.findIndex(m => m.id === thread.id);
+                if (idx >= 0) next[idx] = { ...next[idx], thumbnail: null };
+                return next;
+              });
+            }
+            refetchQueue.shift();
           }
         }
         isRefetching = false;
@@ -759,16 +822,27 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
 
       const processThread = async (thread: RawThread): Promise<DiscordMod | null> => {
         if (isCancelled()) return null;
-        const threadCacheKey = `mod_v2_${thread.id}_${thread.last_message_id}`;
+        const threadCacheKey = `mod_v4_${thread.id}_${thread.last_message_id}`;
 
         try {
           const cachedData = localStorage.getItem(threadCacheKey);
           if (cachedData) {
             const parsed = JSON.parse(cachedData);
+
+            if (thread.message) {
+              const tempMod = processMessages(thread, [thread.message], channelTags);
+              if (tempMod.thumbnail && (!parsed.thumbnail || isDiscordUrlExpired(parsed.thumbnail))) {
+                parsed.thumbnail = tempMod.thumbnail;
+                parsed._thumbChecked = true;
+                try { localStorage.setItem(threadCacheKey, JSON.stringify(parsed)); } catch {}
+              }
+            }
+
             const isThumbnailExpired = isDiscordUrlExpired(parsed.thumbnail);
-            const areLinksExpired = parsed.links?.some((l: string) => isDiscordUrlExpired(l));
+            const areLinksExpired = parsed.links?.some((l: any) => isDiscordUrlExpired(typeof l === 'string' ? l : l.url));
+            const needsThumbnailRefetch = !parsed.thumbnail && !parsed._thumbChecked;
             
-            if (!isThumbnailExpired && !areLinksExpired) {
+            if (!isThumbnailExpired && !areLinksExpired && !needsThumbnailRefetch) {
               return parsed;
             } else {
               refetchQueue.push(thread);
@@ -782,6 +856,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
           });
           if (msgs && msgs.length > 0) {
             const mod = processMessages(thread, msgs, channelTags);
+            mod._thumbChecked = true;
             try { localStorage.setItem(threadCacheKey, JSON.stringify(mod)); } catch {}
             const delay = searchRef.current.trim() ? 1 : 5;
             await new Promise(resolve => setTimeout(resolve, delay));
@@ -953,39 +1028,39 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
     <div className="flex flex-col h-full overflow-hidden">
       {showLogin && <LoginModal onLogin={handleLogin} onCancel={() => setShowLogin(false)} />}
 
-      <div className="relative z-50 shrink-0 flex items-center gap-3 px-6 py-3 bg-hero-sidebar/40 border-b border-white/5 backdrop-blur-md">
+      <div className="relative z-50 shrink-0 flex items-center gap-3 px-6 py-3 bg-hero-sidebar/40 border-b border-hero-border backdrop-blur-md">
         <div className="relative source-dropdown">
           <button 
             onClick={() => setShowSourceDropdown(!showSourceDropdown)}
-            className="flex items-center gap-3 hover:bg-white/5 p-1.5 pr-3 rounded-lg transition-colors"
+            className="flex items-center gap-3 hover:bg-hero-surface p-1.5 pr-3 rounded-lg transition-colors"
           >
             {SUPPORTED_GUILDS[activeSource] ? (
               <img src={SUPPORTED_GUILDS[activeSource].icon} className="w-8 h-8 rounded-full shadow-lg object-cover bg-black shrink-0" />
             ) : (
-              <div className="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center text-white font-black text-sm shrink-0 shadow-lg">D</div>
+              <div className="w-8 h-8 rounded-full bg-[#5865F2] flex items-center justify-center text-hero-text font-black text-sm shrink-0 shadow-lg">D</div>
             )}
             <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-white/70 uppercase tracking-widest">
+              <span className="text-xs font-bold text-hero-textSecondary uppercase tracking-widest">
                 {SUPPORTED_GUILDS[activeSource]?.name || "Discord Store"}
               </span>
-              <ChevronDown size={14} className="text-white/40" />
+              <ChevronDown size={14} className="text-hero-muted" />
             </div>
           </button>
           
           {showSourceDropdown && (
-            <div className="absolute top-full left-0 mt-2 w-64 bg-[#1a1b1e] border border-white/10 rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col backdrop-blur-xl">
+            <div className="absolute top-full left-0 mt-2 w-64 bg-hero-card border border-hero-border rounded-xl shadow-2xl z-50 overflow-hidden flex flex-col backdrop-blur-xl">
               {availableGuilds.map(g => (
                 <button 
                   key={g.id}
                   onClick={() => { setActiveSource(g.id); setShowSourceDropdown(false); }}
-                  className={`flex items-center gap-3 px-4 py-3 hover:bg-white/5 transition-colors text-left ${activeSource === g.id ? 'bg-white/5' : ''}`}
+                  className={`flex items-center gap-3 px-4 py-3 hover:bg-hero-surface transition-colors text-left ${activeSource === g.id ? 'bg-hero-surface' : ''}`}
                 >
                   <img src={SUPPORTED_GUILDS[g.id]?.icon} className="w-6 h-6 rounded-full object-cover shrink-0 bg-black" />
-                  <span className="text-sm font-bold text-white/80">{g.name || SUPPORTED_GUILDS[g.id]?.name}</span>
+                  <span className="text-sm font-bold text-hero-text/80">{g.name || SUPPORTED_GUILDS[g.id]?.name}</span>
                 </button>
               ))}
               {availableGuilds.length === 0 && (
-                <div className="px-4 py-4 text-xs text-center text-white/40 leading-relaxed">
+                <div className="px-4 py-4 text-xs text-center text-hero-muted leading-relaxed">
                   You are not in any supported mod servers.
                 </div>
               )}
@@ -995,13 +1070,13 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
 
         <div className="flex items-center gap-2 flex-1 max-w-lg ml-4">
           <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"/>
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hero-text/30"/>
             <input
               type="text"
               placeholder="Search mods..."
               value={search}
               onChange={e => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-black/40 border border-white/10 rounded-lg text-white placeholder:text-white/20 focus:border-[#5865F2] outline-none transition-colors"
+              className="w-full pl-9 pr-4 py-2 text-xs bg-black/40 border border-hero-border rounded-lg text-hero-text placeholder:text-hero-text/20 focus:border-[#5865F2] outline-none transition-colors"
             />
           </div>
           <select
@@ -1011,13 +1086,13 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
               setSortOrder(val);
               try { localStorage.setItem("discord_sort_order", val); } catch {}
             }}
-            className="bg-black/40 border border-white/10 rounded-lg text-white text-xs px-2 py-2 outline-none focus:border-[#5865F2] transition-colors shrink-0 cursor-pointer"
+            className="bg-black/40 border border-hero-border rounded-lg text-hero-text text-xs px-2 py-2 outline-none focus:border-[#5865F2] transition-colors shrink-0 cursor-pointer"
           >
-            <option className="bg-[#18181b] text-white" value="latest">Latest</option>
-            <option className="bg-[#18181b] text-white" value="oldest">Oldest</option>
-            <option className="bg-[#18181b] text-white" value="a-z">Name (A-Z)</option>
-            <option className="bg-[#18181b] text-white" value="z-a">Name (Z-A)</option>
-            <option className="bg-[#18181b] text-white" value="author">Author</option>
+            <option className="bg-hero-sidebar text-hero-text" value="latest">Latest</option>
+            <option className="bg-hero-sidebar text-hero-text" value="oldest">Oldest</option>
+            <option className="bg-hero-sidebar text-hero-text" value="a-z">Name (A-Z)</option>
+            <option className="bg-hero-sidebar text-hero-text" value="z-a">Name (Z-A)</option>
+            <option className="bg-hero-sidebar text-hero-text" value="author">Author</option>
           </select>
 
           <div className="relative shrink-0 discord-filter-dropdown z-50">
@@ -1026,13 +1101,13 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
               className={`flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg border transition-all ${
                 activeTags.length > 0 
                   ? 'bg-[#5865F2]/10 border-[#5865F2]/30 text-[#5865F2]' 
-                  : 'bg-black/40 border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                  : 'bg-black/40 border-hero-border text-hero-textSecondary hover:bg-hero-surface hover:text-hero-text'
               }`}
             >
               <Filter size={14} />
               <span className="hidden sm:inline">Filters</span>
               {activeTags.length > 0 && (
-                <span className="flex items-center justify-center w-4 h-4 text-[9px] bg-[#5865F2] text-white rounded-full ml-1">
+                <span className="flex items-center justify-center w-4 h-4 text-[9px] bg-[#5865F2] text-hero-text rounded-full ml-1">
                   {activeTags.length}
                 </span>
               )}
@@ -1040,27 +1115,27 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
             </button>
 
             {showTagDropdown && (
-              <div className="absolute top-full right-0 mt-2 w-56 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden backdrop-blur-xl">
-                <div className="px-4 py-2 text-xs font-black uppercase text-white/40 border-b border-white/5 mb-1 flex items-center justify-between">
+              <div className="absolute top-full right-0 mt-2 w-56 bg-hero-sidebar border border-hero-border rounded-xl shadow-2xl py-2 overflow-hidden backdrop-blur-xl">
+                <div className="px-4 py-2 text-xs font-black uppercase text-hero-muted border-b border-hero-border mb-1 flex items-center justify-between">
                   <span>Tags</span>
                   {activeTags.length > 0 && (
                     <button 
                       onClick={() => setActiveTags([])}
-                      className="text-[#5865F2] hover:text-white transition-colors"
+                      className="text-[#5865F2] hover:text-hero-text transition-colors"
                     >Clear</button>
                   )}
                 </div>
                 <div className="max-h-64 overflow-y-auto custom-scrollbar">
                   {allTags.length === 0 ? (
-                    <div className="px-4 py-3 text-xs text-white/30 italic">No tags found</div>
+                    <div className="px-4 py-3 text-xs text-hero-text/30 italic">No tags found</div>
                   ) : (
                     allTags.map(tag => (
                       <button
                         key={tag}
                         onClick={() => toggleTag(tag)}
-                        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-colors group"
+                        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-left hover:bg-hero-surface transition-colors group"
                       >
-                        <span className={`font-bold transition-colors ${activeTags.includes(tag) ? 'text-[#5865F2]' : 'text-white/70 group-hover:text-white'}`}>
+                        <span className={`font-bold transition-colors ${activeTags.includes(tag) ? 'text-[#5865F2]' : 'text-hero-textSecondary group-hover:text-hero-text'}`}>
                           {tag}
                         </span>
                         {activeTags.includes(tag) && (
@@ -1077,7 +1152,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
           {token && (
             <>
               <div className="flex items-center gap-1.5 px-2 mx-1 shrink-0">
-                <span className="text-[9px] text-white/40 font-bold uppercase select-none" title="Scale Icons">A</span>
+                <span className="text-[9px] text-hero-muted font-bold uppercase select-none" title="Scale Icons">A</span>
                 <input 
                   type="range" 
                   min="120" 
@@ -1091,7 +1166,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
                   className="w-16 h-1 bg-white/10 rounded-full appearance-none cursor-pointer hover:bg-white/20 transition-colors"
                   style={{ accentColor: "#5865F2" }}
                 />
-                <span className="text-sm text-white/60 font-bold uppercase select-none" title="Scale Icons">A</span>
+                <span className="text-sm text-hero-text/60 font-bold uppercase select-none" title="Scale Icons">A</span>
               </div>
               {activeSource === "1256679541112311809" && allow18Plus !== false && (
                 <button
@@ -1099,7 +1174,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
                   className={`shrink-0 flex items-center justify-center w-8 h-8 rounded-lg font-bold text-[10px] transition-all border
                     ${isNsfw 
                       ? "bg-red-500/20 text-red-400 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.3)]" 
-                      : "bg-white/5 text-white/40 border-white/10 hover:bg-white/10"}`}
+                      : "bg-hero-surface text-hero-muted border-hero-border hover:bg-hero-surfaceHover"}`}
                   title={isNsfw ? "18+ Archive Active" : "Switch to 18+ Archive"}
                 >
                   18+
@@ -1111,9 +1186,9 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
 
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden md:flex items-center gap-2">
-            {loading && <div className="w-1.5 h-1.5 rounded-full bg-hero-primary animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"></div>}
+            {loading && <div className="w-1.5 h-1.5 rounded-full bg-hero-accent animate-pulse shadow-[0_0_8px_rgba(250,204,21,0.8)]"></div>}
             <span 
-              className={`text-xs transition-all duration-300 font-bold tracking-wide ${loading ? 'text-hero-primary' : 'text-white/30'}`}
+              className={`text-xs transition-all duration-300 font-bold tracking-wide ${loading ? 'text-hero-accent' : 'text-hero-text/30'}`}
             >
               {status}
             </span>
@@ -1122,7 +1197,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
           <button
             onClick={handleRefresh}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-white rounded-lg transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#5865F2] hover:bg-[#4752C4] disabled:opacity-50 text-hero-text rounded-lg transition-all"
           >
             <RefreshCw size={12} className={loading ? "animate-spin" : ""}/>
             Refresh
@@ -1130,15 +1205,15 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
 
           {token ? (
             <div className="flex items-center gap-2">
-              <span className="text-xs text-white/60 font-medium hidden md:block">{username}</span>
-              <button onClick={handleLogout} title="Logout" className="p-1.5 text-white/30 hover:text-red-400 transition-colors">
+              <span className="text-xs text-hero-text/60 font-medium hidden md:block">{username}</span>
+              <button onClick={handleLogout} title="Logout" className="p-1.5 text-hero-text/30 hover:text-red-400 transition-colors">
                 <LogOut size={14}/>
               </button>
             </div>
           ) : (
             <button
               onClick={() => setShowLogin(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-hero-surface hover:bg-hero-surfaceHover text-hero-text border border-hero-border rounded-lg transition-all"
             >
               <LogIn size={12}/>
               Login
@@ -1164,12 +1239,12 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
         <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center p-8">
           <div className="w-24 h-24 rounded-full bg-[#5865F2]/20 flex items-center justify-center text-5xl">🛒</div>
           <div>
-            <h3 className="text-2xl font-black text-white mb-2">Mod Discovery</h3>
-            <p className="text-white/40 text-sm max-w-sm">Log in with your Discord account to browse mods from the Endeavor Headquarters server.</p>
+            <h3 className="text-2xl font-black text-hero-text mb-2">Mod Discovery</h3>
+            <p className="text-hero-muted text-sm max-w-sm">Log in with your Discord account to browse mods from the Endeavor Headquarters server.</p>
           </div>
           <button
             onClick={() => setShowLogin(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-[#5865F2] hover:bg-[#4752C4] text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(88,101,242,0.3)] hover:shadow-[0_0_30px_rgba(88,101,242,0.5)]"
+            className="flex items-center gap-2 px-6 py-3 bg-[#5865F2] hover:bg-[#4752C4] text-hero-text font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(88,101,242,0.3)] hover:shadow-[0_0_30px_rgba(88,101,242,0.5)]"
           >
             <LogIn size={18}/>
             Login to Discord
@@ -1187,7 +1262,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
           {mods.length === 0 && !loading && fullyLoaded && (
             <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
               <div className="text-5xl opacity-30">📦</div>
-              <p className="text-white/30 text-sm">
+              <p className="text-hero-text/30 text-sm">
                 {search.trim() || activeTags.length > 0
                   ? "No mods match your search. Try different keywords."
                   : "No mods found. Click Refresh to reload."}
@@ -1199,15 +1274,15 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
           {mods.length === 0 && !loading && !fullyLoaded && allMods.length === 0 && (
             <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
               <div className="text-5xl opacity-30">📦</div>
-              <p className="text-white/30 text-sm">No mods found. Click <strong>Refresh</strong> to load the store.</p>
+              <p className="text-hero-text/30 text-sm">No mods found. Click <strong>Refresh</strong> to load the store.</p>
             </div>
           )}
 
           {/* Initial loading state */}
           {mods.length === 0 && loading && allMods.length === 0 && (
             <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
-              <RefreshCw size={24} className="animate-spin text-white/30"/>
-              <p className="text-white/30 text-sm">{status}</p>
+              <RefreshCw size={24} className="animate-spin text-hero-text/30"/>
+              <p className="text-hero-text/30 text-sm">{status}</p>
             </div>
           )}
 
@@ -1215,7 +1290,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
           {search.trim() && mods.length === 0 && loading && allMods.length > 0 && (
             <div className="flex flex-col items-center justify-center h-64 gap-4 text-center">
               <RefreshCw size={24} className="animate-spin text-[#5865F2]"/>
-              <p className="text-white/50 text-sm">Searching through all mods... ({allMods.length} checked so far)</p>
+              <p className="text-hero-muted text-sm">Searching through all mods... ({allMods.length} checked so far)</p>
             </div>
           )}
 
@@ -1234,7 +1309,7 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
 
           {/* Bottom loading indicator while auto-loading more pages */}
           {loading && allMods.length > 0 && (
-            <div className="flex items-center justify-center gap-3 py-8 text-white/40">
+            <div className="flex items-center justify-center gap-3 py-8 text-hero-muted">
               <RefreshCw size={14} className="animate-spin"/>
               <span className="text-xs">{status}</span>
             </div>

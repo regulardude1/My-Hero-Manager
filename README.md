@@ -76,7 +76,7 @@ My Hero Manager relies on several external tools (located in the `tools/` direct
 - **UEJSON**: A utility that converts `.uasset` files into readable `.json` files and compiles them back. Essential for modifying internal mesh paths.
 - **SkinSwapperEngine.py**: A custom Python script that orchestrates the JSON modification of mesh assets to swap costumes.
 - **Embedded Python**: A bundled Python runtime ensuring `SkinSwapperEngine.py` can execute without requiring the user to install Python on their system.
-- **FFmpeg**: Used for converting and handling various media and texture assets.
+- **FFmpeg**: Used for converting and handling various media and texture assets. Not committed to git (too large) — place an `ffmpeg.exe` into `tools/` if you build from source; it's bundled automatically in compiled releases.
 
 ---
 

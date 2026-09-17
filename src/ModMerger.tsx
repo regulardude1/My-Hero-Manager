@@ -141,14 +141,14 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
   };
 
   return (
-    <div className="flex-1 flex h-full bg-hero-bg text-white overflow-hidden relative">
+    <div className="flex-1 flex h-full bg-hero-bg text-hero-text overflow-hidden relative">
       {/* Sidebar - Mod Selection List */}
-      <div className="w-1/3 min-w-[300px] max-w-[400px] bg-[#1a1a24] border-r border-white/5 flex flex-col h-full overflow-hidden z-10 shadow-2xl">
-        <div className="p-6 pb-4 bg-[#1a1a24] z-10 border-b border-white/5 shadow-md">
-          <h2 className="text-2xl font-black italic tracking-tighter text-hero-primary flex items-center gap-2">
+      <div className="w-1/3 min-w-[300px] max-w-[400px] bg-hero-sidebar border-r border-hero-border flex flex-col h-full overflow-hidden z-10 shadow-2xl">
+        <div className="p-6 pb-4 bg-hero-sidebar z-10 border-b border-hero-border shadow-md">
+          <h2 className="text-2xl font-black italic tracking-tighter text-hero-accent flex items-center gap-2">
             <Merge size={24} /> SELECT MODS
           </h2>
-          <p className="text-xs text-white/50 mt-2 uppercase tracking-widest font-bold leading-relaxed">
+          <p className="text-xs text-hero-muted mt-2 uppercase tracking-widest font-bold leading-relaxed">
             Check the mods you wish to merge or split.
           </p>
           <div className="mt-4 flex justify-between items-center text-xs font-bold bg-black/40 px-3 py-2 rounded">
@@ -166,8 +166,8 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
               key={mod.id}
               className={`w-full flex items-center gap-3 p-3 rounded-md cursor-pointer transition-all border ${
                 selectedMods.has(mod.id)
-                  ? "bg-hero-primary/10 border-hero-primary shadow-[0_0_15px_rgba(250,204,21,0.15)]"
-                  : "bg-black/20 border-white/5 hover:border-white/20 hover:bg-white/5"
+                  ? "bg-hero-accent/10 border-hero-accent shadow-[0_0_15px_rgba(250,204,21,0.15)]"
+                  : "bg-black/20 border-hero-border hover:border-hero-borderHover hover:bg-hero-surface"
               }`}
             >
               <div className="relative flex items-center justify-center w-5 h-5">
@@ -175,15 +175,15 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
                   type="checkbox" 
                   checked={selectedMods.has(mod.id)}
                   onChange={() => toggleSelection(mod.id)}
-                  className="appearance-none w-5 h-5 rounded border border-white/30 checked:bg-hero-primary checked:border-hero-primary transition-all cursor-pointer"
+                  className="appearance-none w-5 h-5 rounded border border-white/30 checked:bg-hero-accent checked:border-hero-accent transition-all cursor-pointer"
                 />
                 {selectedMods.has(mod.id) && <CheckCircle2 size={14} className="absolute text-black pointer-events-none" />}
               </div>
               <div className="flex-1 min-w-0">
-                <div className={`font-bold text-sm truncate ${selectedMods.has(mod.id) ? "text-hero-primary" : "text-white"}`}>
+                <div className={`font-bold text-sm truncate ${selectedMods.has(mod.id) ? "text-hero-accent" : "text-hero-text"}`}>
                   {mod.name}
                 </div>
-                <div className="text-[10px] text-white/40 truncate uppercase tracking-wider mt-0.5">
+                <div className="text-[10px] text-hero-muted truncate uppercase tracking-wider mt-0.5">
                   {mod.character !== "Unknown" ? mod.character : mod.category}
                 </div>
               </div>
@@ -196,25 +196,25 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
       <div className="flex-1 flex flex-col h-full overflow-y-auto p-8 relative z-0">
         {selectedMods.size === 0 ? (
           <div className="flex-1 flex flex-col items-center justify-center opacity-50">
-            <Shuffle size={64} className="mb-6 text-hero-primary animate-pulse" />
+            <Shuffle size={64} className="mb-6 text-hero-accent animate-pulse" />
             <h3 className="text-3xl font-black tracking-widest italic mb-4">MOD MERGER & SPLITTER</h3>
-            <p className="max-w-md text-center text-base leading-relaxed text-white/70">
+            <p className="max-w-md text-center text-base leading-relaxed text-hero-textSecondary">
               Select multiple mods from the left to merge them into a single unified mod pack.<br/><br/>
               Select a single merged pack to split it back into individual mods.
             </p>
           </div>
         ) : selectedMods.size === 1 ? (
           <div className="flex-1 flex flex-col mx-auto w-full max-w-3xl items-center justify-center">
-            <div className="bg-[#15151b] border border-white/10 rounded-xl p-8 w-full shadow-2xl text-center">
-              <SplitSquareVertical size={48} className="text-hero-primary mx-auto mb-6" />
+            <div className="bg-hero-bg border border-hero-border rounded-xl p-8 w-full shadow-2xl text-center">
+              <SplitSquareVertical size={48} className="text-hero-accent mx-auto mb-6" />
               <h2 className="text-3xl font-black italic tracking-tighter mb-2">SPLIT MOD PACK</h2>
-              <p className="text-white/60 text-sm max-w-md mx-auto mb-8 leading-relaxed">
+              <p className="text-hero-text/60 text-sm max-w-md mx-auto mb-8 leading-relaxed">
                 If the selected mod contains multiple <strong>.pak</strong> variations inside it, splitting will unpack them into individual toggleable mods in your library.
               </p>
               
-              <div className="bg-black/30 border border-white/5 p-4 rounded-lg mb-8 text-left flex items-center gap-4">
+              <div className="bg-black/30 border border-hero-border p-4 rounded-lg mb-8 text-left flex items-center gap-4">
                 <div className="flex-1 min-w-0">
-                  <div className="text-xs text-hero-primary font-bold tracking-widest uppercase mb-1">Target Mod</div>
+                  <div className="text-xs text-hero-accent font-bold tracking-widest uppercase mb-1">Target Mod</div>
                   <div className="text-lg font-bold truncate">{selectedModObjects[0]?.name}</div>
                 </div>
               </div>
@@ -231,7 +231,7 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
               <button 
                 onClick={handleSplit}
                 disabled={isProcessing}
-                className="w-full py-4 bg-hero-primary text-black text-lg font-black italic tracking-widest rounded-sm hover:bg-yellow-300 transition-all shadow-[0_0_20px_rgba(250,204,21,0.2)] hover:shadow-[0_0_30px_rgba(250,204,21,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-3 transform hover:scale-[1.02] active:scale-95"
+                className="w-full py-4 bg-hero-accent text-black text-lg font-black italic tracking-widest rounded-sm hover:bg-yellow-300 transition-all shadow-[0_0_20px_rgba(250,204,21,0.2)] hover:shadow-[0_0_30px_rgba(250,204,21,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-3 transform hover:scale-[1.02] active:scale-95"
               >
                 {isProcessing ? <RefreshCw size={20} className="animate-spin" /> : <SplitSquareVertical size={20} />}
                 {isProcessing ? "SPLITTING..." : "EXPLODE MOD PACK"}
@@ -240,31 +240,31 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
           </div>
         ) : (
           <div className="flex flex-col h-full mx-auto w-full max-w-7xl">
-            <div className="flex items-end justify-between mb-6 pb-4 border-b border-white/10">
+            <div className="flex items-end justify-between mb-6 pb-4 border-b border-hero-border">
               <div>
-                <h2 className="text-3xl font-black italic tracking-tighter text-white">MERGE PREVIEW</h2>
-                <p className="text-white/50 text-sm mt-1 uppercase tracking-widest font-bold">Grouping {selectedMods.size} mods together</p>
+                <h2 className="text-3xl font-black italic tracking-tighter text-hero-text">MERGE PREVIEW</h2>
+                <p className="text-hero-muted text-sm mt-1 uppercase tracking-widest font-bold">Grouping {selectedMods.size} mods together</p>
               </div>
             </div>
 
             {/* Merge Controls Area */}
-            <div className="bg-[#15151b] border border-white/5 p-6 rounded-xl shadow-xl mb-8">
+            <div className="bg-hero-bg border border-hero-border p-6 rounded-xl shadow-xl mb-8">
               <div className="flex flex-col md:flex-row gap-6">
                 <div className="flex-1">
-                  <label className="block text-xs font-bold text-hero-primary tracking-widest uppercase mb-2">New Mod Pack Name</label>
+                  <label className="block text-xs font-bold text-hero-accent tracking-widest uppercase mb-2">New Mod Pack Name</label>
                   <input
                     type="text"
                     value={mergeName}
                     onChange={(e) => setMergeName(e.target.value)}
                     placeholder="e.g. Ultimate Toga Pack..."
-                    className="w-full bg-black/40 border border-white/10 rounded px-4 py-3 text-white focus:outline-none focus:border-hero-primary focus:ring-1 focus:ring-hero-primary/50 transition-all font-bold"
+                    className="w-full bg-black/40 border border-hero-border rounded px-4 py-3 text-hero-text focus:outline-none focus:border-hero-accent focus:ring-1 focus:ring-hero-primary/50 transition-all font-bold"
                   />
                 </div>
                 <div className="flex-1 flex flex-col justify-end">
                   <button 
                     onClick={handleMerge}
                     disabled={isProcessing || !mergeName.trim()}
-                    className="w-full h-[50px] bg-hero-primary text-black text-sm font-black italic tracking-widest rounded-sm hover:bg-yellow-300 transition-all shadow-[0_0_15px_rgba(250,204,21,0.2)] hover:shadow-[0_0_25px_rgba(250,204,21,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 transform hover:scale-[1.02] active:scale-95"
+                    className="w-full h-[50px] bg-hero-accent text-black text-sm font-black italic tracking-widest rounded-sm hover:bg-yellow-300 transition-all shadow-[0_0_15px_rgba(250,204,21,0.2)] hover:shadow-[0_0_25px_rgba(250,204,21,0.4)] disabled:opacity-50 disabled:cursor-not-allowed flex justify-center items-center gap-2 transform hover:scale-[1.02] active:scale-95"
                   >
                     {isProcessing ? <RefreshCw size={18} className="animate-spin" /> : <Merge size={18} />}
                     {isProcessing ? "MERGING..." : "MERGE INTO ONE PACK"}
@@ -284,32 +284,32 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
 
             {/* Visual Coverage Preview */}
             <div>
-              <h3 className="text-sm font-bold text-hero-primary tracking-widest uppercase mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-bold text-hero-accent tracking-widest uppercase mb-4 flex items-center gap-2">
                 <CheckCircle2 size={16} /> 
                 Costume Coverage Preview
               </h3>
               
               {!characterId ? (
-                <div className="bg-white/5 border border-white/10 rounded-xl p-8 text-center text-white/50 italic text-sm">
+                <div className="bg-hero-surface border border-hero-border rounded-xl p-8 text-center text-hero-muted italic text-sm">
                   Could not determine a specific character from the selected mods to show a visual preview.
                 </div>
               ) : isLoadingCostumes ? (
-                <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-xl border border-white/5 p-12 min-h-[300px]">
-                  <RefreshCw size={40} className="text-hero-primary animate-spin mb-4" />
-                  <p className="text-white/50 text-sm font-bold uppercase tracking-widest">Loading Game Thumbnails...</p>
+                <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-xl border border-hero-border p-12 min-h-[300px]">
+                  <RefreshCw size={40} className="text-hero-accent animate-spin mb-4" />
+                  <p className="text-hero-muted text-sm font-bold uppercase tracking-widest">Loading Game Thumbnails...</p>
                 </div>
               ) : costumeError ? (
                 <div className="flex-1 flex flex-col items-center justify-center bg-red-900/10 rounded-xl border border-red-500/20 p-8 text-center">
                   <AlertTriangle size={32} className="text-red-500 mb-3" />
-                  <p className="text-white/70 text-xs max-w-md">{costumeError}</p>
+                  <p className="text-hero-textSecondary text-xs max-w-md">{costumeError}</p>
                 </div>
               ) : (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                   {costumes.map(costume => {
                     const overwritten = isCostumeOverwritten(costume.id);
                     return (
-                      <div key={costume.id} className={`flex flex-col bg-[#15151b] border-2 rounded-lg overflow-hidden transition-all ${
-                        overwritten ? "border-hero-primary shadow-[0_0_15px_rgba(250,204,21,0.2)] scale-[1.02] z-10" : "border-white/5 opacity-50"
+                      <div key={costume.id} className={`flex flex-col bg-hero-bg border-2 rounded-lg overflow-hidden transition-all ${
+                        overwritten ? "border-hero-accent shadow-[0_0_15px_rgba(250,204,21,0.2)] scale-[1.02] z-10" : "border-hero-border opacity-50"
                       }`}>
                         <div className="aspect-[3/4] bg-black/40 relative flex items-center justify-center overflow-hidden">
                           <img 
@@ -317,19 +317,19 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
                             alt={costume.name}
                             className="w-full h-full object-cover object-top"
                           />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent" />
+                          <div className="absolute inset-0 bg-gradient-to-t from-hero-bg/90 via-hero-bg/30 to-transparent" />
                           <div className="absolute bottom-2 left-2 right-2 text-[10px] font-bold leading-tight">
                             {costume.name}
                           </div>
                           
                           {overwritten && (
-                            <div className="absolute top-2 right-2 bg-hero-primary text-black rounded-full p-1 shadow-lg">
+                            <div className="absolute top-2 right-2 bg-hero-accent text-black rounded-full p-1 shadow-lg">
                               <CheckCircle2 size={14} />
                             </div>
                           )}
                         </div>
                         {overwritten && (
-                          <div className="bg-hero-primary py-1 px-2 text-center text-black text-[9px] font-black tracking-widest uppercase">
+                          <div className="bg-hero-accent py-1 px-2 text-center text-black text-[9px] font-black tracking-widest uppercase">
                             WILL OVERWRITE
                           </div>
                         )}

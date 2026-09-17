@@ -55,9 +55,9 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
 
   return (
     <div className="absolute inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-[#18181b] border border-white/10 rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden">
+      <div className="bg-hero-sidebar border border-hero-border rounded-2xl w-full max-w-md p-6 shadow-2xl relative overflow-hidden">
         <div className="absolute inset-0 bg-gradient-to-br from-[#DA8F44]/10 to-transparent pointer-events-none" />
-        <button onClick={onCancel} className="absolute top-4 right-4 text-white/30 hover:text-white transition-colors">
+        <button onClick={onCancel} className="absolute top-4 right-4 text-hero-text/30 hover:text-hero-text transition-colors">
           <ChevronLeft className="rotate-180" size={20} />
         </button>
         
@@ -65,8 +65,8 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
           <div className="w-16 h-16 rounded-full bg-[#DA8F44]/20 flex items-center justify-center text-[#DA8F44] mb-2">
             <Key size={32} />
           </div>
-          <h2 className="text-xl font-black text-white">Nexus Mods API Key</h2>
-          <div className="text-left text-xs text-white/60 bg-black/40 p-4 rounded-xl w-full border border-white/5 space-y-2 mb-2 shadow-inner">
+          <h2 className="text-xl font-black text-hero-text">Nexus Mods API Key</h2>
+          <div className="text-left text-xs text-hero-text/60 bg-black/40 p-4 rounded-xl w-full border border-hero-border space-y-2 mb-2 shadow-inner">
             <p>1. Click the <strong>Get API Key</strong> button below to open your Nexus settings.</p>
             <p>2. Scroll all the way down to the bottom of the page.</p>
             <p>3. Find <strong>Personal API Key</strong> and click <strong>Generate</strong>.</p>
@@ -79,7 +79,7 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
             onChange={(e) => setKey(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
             placeholder="Paste your Personal API Key here..."
-            className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-white text-sm focus:border-[#DA8F44] outline-none transition-colors"
+            className="w-full bg-black/40 border border-hero-border rounded-xl px-4 py-3 text-hero-text text-sm focus:border-[#DA8F44] outline-none transition-colors"
           />
 
           {error && <p className="text-red-400 text-xs font-bold">{error}</p>}
@@ -87,14 +87,14 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
           <div className="flex w-full gap-3 mt-4">
             <button 
               onClick={() => openUrl("https://www.nexusmods.com/settings/api-keys")}
-              className="flex-1 px-4 py-2.5 rounded-xl font-bold text-xs bg-white/5 hover:bg-white/10 text-white/70 transition-all border border-white/10"
+              className="flex-1 px-4 py-2.5 rounded-xl font-bold text-xs bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary transition-all border border-hero-border"
             >
               Get API Key
             </button>
             <button 
               onClick={handleSubmit}
               disabled={loading || !key.trim()}
-              className="flex-[2] flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm bg-[#DA8F44] hover:bg-[#b87838] text-white transition-all shadow-[0_0_20px_rgba(218,143,68,0.3)] hover:shadow-[0_0_30px_rgba(218,143,68,0.5)] disabled:opacity-50"
+              className="flex-[2] flex justify-center items-center gap-2 px-4 py-2.5 rounded-xl font-bold text-sm bg-[#DA8F44] hover:bg-[#b87838] text-hero-text transition-all shadow-[0_0_20px_rgba(218,143,68,0.3)] hover:shadow-[0_0_30px_rgba(218,143,68,0.5)] disabled:opacity-50"
             >
               {loading ? <RefreshCw size={16} className="animate-spin" /> : <LogIn size={16} />}
               Login
@@ -232,33 +232,33 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
   };
 
   return (
-    <div className="bg-hero-card/60 border border-white/5 rounded-xl overflow-hidden hover:border-[#DA8F44]/40 transition-all duration-300 flex flex-col">
+    <div className="bg-hero-card border border-hero-border rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-1 hover:border-[#DA8F44]/40 transition-all duration-300 flex flex-col">
       {/* Thumbnail */}
-      <div className="relative w-full aspect-video bg-black/40">
+      <div className="relative w-full aspect-video bg-black/40 group">
         {thumbnail && !imgError ? (
           <img src={thumbnail} alt={mod.name} loading="lazy" className="w-full h-full object-cover" onError={() => setImgError(true)}/>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/20 text-4xl">📦</div>
+          <div className="w-full h-full flex items-center justify-center text-hero-text/20 text-4xl">📦</div>
         )}
       </div>
 
       {/* Content */}
       <div className="p-4 flex flex-col flex-1 gap-2">
-        <h3 className="font-bold text-white text-sm leading-tight line-clamp-2">{mod.name}</h3>
-        <p className="text-xs text-white/40">by <span className="text-white/60">{mod.author}</span></p>
+        <h3 className="font-bold text-hero-text text-sm leading-tight line-clamp-2">{mod.name}</h3>
+        <p className="text-xs text-hero-muted">by <span className="text-hero-text/60">{mod.author}</span></p>
 
         <button
           onClick={handleExpand}
-          className="mt-auto w-full flex items-center justify-center gap-2 bg-[#DA8F44] hover:bg-[#b87838] text-white text-xs font-black py-2 rounded-lg transition-all"
+          className="mt-auto w-full flex items-center justify-center gap-2 bg-[#DA8F44] hover:bg-[#b87838] text-hero-text text-xs font-black py-2 rounded-lg transition-all"
         >
           {expanded ? "Hide Downloads" : "View Downloads"}
         </button>
 
         {expanded && (
           <div className="mt-2 space-y-1.5">
-            {loadingFiles && <p className="text-xs text-white/40 text-center py-2">Loading files...</p>}
+            {loadingFiles && <p className="text-xs text-hero-muted text-center py-2">Loading files...</p>}
             {!loadingFiles && files.length === 0 && (
-              <p className="text-xs text-white/40 text-center py-2">No files available</p>
+              <p className="text-xs text-hero-muted text-center py-2">No files available</p>
             )}
             {files.map((file, i) => {
               const isLoading = downloading === file.file_name;
@@ -281,7 +281,7 @@ const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedU
             })}
             <button 
               onClick={() => openUrl(`https://www.nexusmods.com/myheroultrarumble/mods/${mod.mod_id}`)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 text-white/70 border border-white/10 transition-all mt-2"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border transition-all mt-2"
             >
               <ExternalLink size={12} /> View on Nexus Mods
             </button>
@@ -516,20 +516,20 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
   });
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0d12] overflow-hidden">
+    <div className="flex flex-col h-full bg-hero-bg overflow-hidden">
       {showLogin && <LoginModal onLogin={handleLogin} onCancel={() => setShowLogin(false)} />}
       
       {/* Top Navigation / Status Bar */}
-      <div className="shrink-0 flex items-center justify-between p-4 bg-[#18181b] border-b border-white/5 relative z-20 shadow-md">
+      <div className="shrink-0 flex items-center justify-between p-4 bg-hero-sidebar border-b border-hero-border relative z-20 shadow-md">
         
         {/* Breadcrumb / Nav */}
         <div className="flex items-center gap-4 relative">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#DA8F44] text-white flex items-center justify-center font-black text-lg border border-white/10 shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[#DA8F44] text-hero-text flex items-center justify-center font-black text-lg border border-hero-border shrink-0">
               N
             </div>
             <div className="flex flex-col">
-              <h2 className="text-[10px] font-black italic tracking-widest text-white/50 flex items-center gap-2 uppercase">
+              <h2 className="text-[10px] font-black italic tracking-widest text-hero-muted flex items-center gap-2 uppercase">
                 NEXUS MODS
               </h2>
             </div>
@@ -539,13 +539,13 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
         {/* Search, Sort, Scale */}
         <div className="flex items-center gap-2 flex-1 max-w-lg ml-4">
           <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"/>
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hero-text/30"/>
             <input 
               type="text" 
               placeholder="Search mods..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-black/40 border border-white/10 rounded-lg text-white placeholder:text-white/20 focus:border-[#DA8F44] outline-none transition-colors"
+              className="w-full pl-9 pr-4 py-2 text-xs bg-black/40 border border-hero-border rounded-lg text-hero-text placeholder:text-hero-text/20 focus:border-[#DA8F44] outline-none transition-colors"
             />
           </div>
 
@@ -556,7 +556,7 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
               className={`flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg border transition-all ${
                 activeTags.length > 0 
                   ? 'bg-[#DA8F44]/10 border-[#DA8F44]/30 text-[#DA8F44]' 
-                  : 'bg-black/40 border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                  : 'bg-black/40 border-hero-border text-hero-textSecondary hover:bg-hero-surface hover:text-hero-text'
               }`}
             >
               <Filter size={14} />
@@ -570,27 +570,27 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
             </button>
 
             {showTagDropdown && (
-              <div className="absolute top-full right-0 mt-2 w-56 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden backdrop-blur-xl">
-                <div className="px-4 py-2 text-xs font-black uppercase text-white/40 border-b border-white/5 mb-1 flex items-center justify-between">
+              <div className="absolute top-full right-0 mt-2 w-56 bg-hero-sidebar border border-hero-border rounded-xl shadow-2xl py-2 overflow-hidden backdrop-blur-xl">
+                <div className="px-4 py-2 text-xs font-black uppercase text-hero-muted border-b border-hero-border mb-1 flex items-center justify-between">
                   <span>Characters</span>
                   {activeTags.length > 0 && (
                     <button 
                       onClick={() => setActiveTags([])}
-                      className="text-[#DA8F44] hover:text-white transition-colors"
+                      className="text-[#DA8F44] hover:text-hero-text transition-colors"
                     >Clear</button>
                   )}
                 </div>
                 <div className="max-h-64 overflow-y-auto custom-scrollbar">
                   {allTags.length === 0 ? (
-                    <div className="px-4 py-3 text-xs text-white/30 italic">No characters found in loaded mods</div>
+                    <div className="px-4 py-3 text-xs text-hero-text/30 italic">No characters found in loaded mods</div>
                   ) : (
                     allTags.map(tag => (
                       <button
                         key={tag}
                         onClick={() => toggleTag(tag)}
-                        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-colors group"
+                        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-left hover:bg-hero-surface transition-colors group"
                       >
-                        <span className={`font-bold transition-colors ${activeTags.includes(tag) ? 'text-[#DA8F44]' : 'text-white/70 group-hover:text-white'}`}>
+                        <span className={`font-bold transition-colors ${activeTags.includes(tag) ? 'text-[#DA8F44]' : 'text-hero-textSecondary group-hover:text-hero-text'}`}>
                           {tag}
                         </span>
                         {activeTags.includes(tag) && <Check size={14} className="text-[#DA8F44]" />}
@@ -604,7 +604,7 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
           
           
           <div className="flex items-center gap-1.5 px-2 mx-1 shrink-0 hidden sm:flex">
-            <span className="text-[9px] text-white/40 font-bold uppercase select-none" title="Scale Icons">A</span>
+            <span className="text-[9px] text-hero-muted font-bold uppercase select-none" title="Scale Icons">A</span>
             <input 
               type="range" 
               min="120" 
@@ -618,7 +618,7 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
               className="w-16 h-1 bg-white/10 rounded-full appearance-none cursor-pointer hover:bg-white/20 transition-colors"
               style={{ accentColor: "#DA8F44" }}
             />
-            <span className="text-sm text-white/60 font-bold uppercase select-none" title="Scale Icons">A</span>
+            <span className="text-sm text-hero-text/60 font-bold uppercase select-none" title="Scale Icons">A</span>
           </div>
         </div>
         
@@ -626,14 +626,14 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden md:flex items-center gap-2">
             {loading && <div className="w-1.5 h-1.5 rounded-full bg-[#DA8F44] animate-pulse shadow-[0_0_8px_rgba(218,143,68,0.8)]"></div>}
-            <span className={`text-xs transition-all duration-300 font-bold tracking-wide ${loading ? 'text-[#DA8F44]' : 'text-white/30'}`}>
+            <span className={`text-xs transition-all duration-300 font-bold tracking-wide ${loading ? 'text-[#DA8F44]' : 'text-hero-text/30'}`}>
               {status}
             </span>
           </div>
           <button 
             onClick={handleRefresh}
             disabled={loading || !token}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#DA8F44] hover:bg-[#b87838] disabled:opacity-50 text-white rounded-lg transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#DA8F44] hover:bg-[#b87838] disabled:opacity-50 text-hero-text rounded-lg transition-all"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
           </button>
@@ -642,19 +642,19 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
               <button
                 onClick={() => invoke("open_nexus_login")}
                 title="Connect Nexus Account (For Free Downloads)"
-                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg transition-all"
+                className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-hero-surface hover:bg-hero-surfaceHover text-hero-text border border-hero-border rounded-lg transition-all"
               >
                 <LogIn size={14}/>
                 <span className="hidden md:inline">Nexus Login</span>
               </button>
-              <button onClick={handleLogout} title="Logout API Key" className="p-1.5 text-white/30 hover:text-red-400 transition-colors">
+              <button onClick={handleLogout} title="Logout API Key" className="p-1.5 text-hero-text/30 hover:text-red-400 transition-colors">
                 <LogOut size={14}/>
               </button>
             </div>
           ) : (
             <button
               onClick={() => setShowLogin(true)}
-              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-white/5 hover:bg-white/10 text-white border border-white/10 rounded-lg transition-all"
+              className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-hero-surface hover:bg-hero-surfaceHover text-hero-text border border-hero-border rounded-lg transition-all"
             >
               <LogIn size={12}/>
               Login
@@ -670,12 +670,12 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
             <Key size={48} />
           </div>
           <div>
-            <h3 className="text-2xl font-black text-white mb-2">Nexus Mods Integration</h3>
-            <p className="text-white/40 text-sm max-w-sm">Log in with your Personal API Key to browse and download from Nexus Mods.</p>
+            <h3 className="text-2xl font-black text-hero-text mb-2">Nexus Mods Integration</h3>
+            <p className="text-hero-muted text-sm max-w-sm">Log in with your Personal API Key to browse and download from Nexus Mods.</p>
           </div>
           <button
             onClick={() => setShowLogin(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-[#DA8F44] hover:bg-[#b87838] text-white font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(218,143,68,0.3)] hover:shadow-[0_0_30px_rgba(218,143,68,0.5)]"
+            className="flex items-center gap-2 px-6 py-3 bg-[#DA8F44] hover:bg-[#b87838] text-hero-text font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(218,143,68,0.3)] hover:shadow-[0_0_30px_rgba(218,143,68,0.5)]"
           >
             <LogIn size={18}/>
             Enter API Key
@@ -703,15 +703,15 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
               />
             ))}
             {loading && Array.from({length: 4}).map((_, i) => (
-              <div key={`skel-${i}`} className="bg-hero-card/40 border border-white/5 rounded-xl h-64 animate-pulse"></div>
+              <div key={`skel-${i}`} className="bg-hero-card/40 border border-hero-border rounded-xl h-64 animate-pulse"></div>
             ))}
             {!loading && filteredMods.length === 0 && (
               <div className="col-span-full py-20 text-center flex flex-col items-center justify-center">
-                <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-white/20 mb-4">
+                <div className="w-16 h-16 rounded-full bg-hero-surface flex items-center justify-center text-hero-text/20 mb-4">
                   <Search size={24} />
                 </div>
-                <h3 className="text-xl font-bold text-white mb-2">No mods found</h3>
-                <p className="text-white/40">Try adjusting your search</p>
+                <h3 className="text-xl font-bold text-hero-text mb-2">No mods found</h3>
+                <p className="text-hero-muted">Try adjusting your search</p>
               </div>
             )}
           </div>

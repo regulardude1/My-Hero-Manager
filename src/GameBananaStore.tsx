@@ -85,25 +85,25 @@ const ModCard = memo(function ModCard({ mod, onDownloadedUrl, downloadedUrls, lo
   };
 
   return (
-    <div className="bg-hero-card/60 border border-white/5 rounded-xl overflow-hidden hover:border-yellow-500/40 transition-all duration-300 flex flex-col">
+    <div className="bg-hero-card border border-hero-border rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-1 hover:border-yellow-500/40 transition-all duration-300 flex flex-col">
       {/* Thumbnail */}
       <div className="relative w-full aspect-video bg-black/40">
         {thumbnail && !imgError ? (
           <img src={thumbnail} alt={mod._sName} loading="lazy" className="w-full h-full object-cover" onError={() => setImgError(true)}/>
         ) : (
-          <div className="w-full h-full flex items-center justify-center text-white/20 text-4xl">🍌</div>
+          <div className="w-full h-full flex items-center justify-center text-hero-text/20 text-4xl">🍌</div>
         )}
       </div>
 
       {/* Content */}
       <div className="p-4 flex flex-col flex-1 gap-2">
-        <h3 className="font-bold text-white text-sm leading-tight line-clamp-2">{mod._sName}</h3>
-        <p className="text-xs text-white/40">by <span className="text-white/60">{mod._aSubmitter._sName}</span></p>
+        <h3 className="font-bold text-hero-text text-sm leading-tight line-clamp-2">{mod._sName}</h3>
+        <p className="text-xs text-hero-muted">by <span className="text-hero-text/60">{mod._aSubmitter._sName}</span></p>
 
         {mod._aTags && mod._aTags.length > 0 && (
           <div className="flex flex-wrap gap-1">
             {mod._aTags.slice(0, 3).map(t => (
-              <span key={t} className="px-2 py-0.5 bg-white/5 text-yellow-300 text-[10px] rounded-full border border-white/10">{t}</span>
+              <span key={t} className="px-2 py-0.5 bg-hero-surface text-yellow-300 text-[10px] rounded-full border border-hero-border">{t}</span>
             ))}
           </div>
         )}
@@ -117,9 +117,9 @@ const ModCard = memo(function ModCard({ mod, onDownloadedUrl, downloadedUrls, lo
 
         {expanded && (
           <div className="mt-2 space-y-1.5">
-            {loadingFiles && <p className="text-xs text-white/40 text-center py-2">Loading files...</p>}
+            {loadingFiles && <p className="text-xs text-hero-muted text-center py-2">Loading files...</p>}
             {!loadingFiles && files.length === 0 && (
-              <p className="text-xs text-white/40 text-center py-2">No files available</p>
+              <p className="text-xs text-hero-muted text-center py-2">No files available</p>
             )}
             {files.map((file, i) => {
               const url = file._sDownloadUrl;
@@ -137,7 +137,7 @@ const ModCard = memo(function ModCard({ mod, onDownloadedUrl, downloadedUrls, lo
                         ? (isDownloaded 
                             ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border border-blue-600/50" 
                             : "bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/20")
-                        : "bg-white/5 hover:bg-white/10 text-white/70 border border-white/10"}`}
+                        : "bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border"}`}
                 >
                   {direct ? <Download size={12}/> : <ExternalLink size={12}/>}
                   <span className="truncate flex-1 text-left">{isLoading ? "Installing..." : (direct ? `⬇ ${label}` : label)}</span>
@@ -147,7 +147,7 @@ const ModCard = memo(function ModCard({ mod, onDownloadedUrl, downloadedUrls, lo
             })}
             <button 
               onClick={() => window.open(mod._sProfileUrl, "_blank")}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-white/5 hover:bg-white/10 text-white/70 border border-white/10 transition-all mt-2"
+              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border transition-all mt-2"
             >
               <ExternalLink size={12} /> View on GameBanana
             </button>
@@ -287,18 +287,18 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
   }, [filteredMods.length, loading, hasMore, handleNextPage]);
 
   return (
-    <div className="flex flex-col h-full bg-[#0d0d12]">
+    <div className="flex flex-col h-full bg-hero-bg">
       {/* Top Navigation / Status Bar (Matched with DiscordStore) */}
-      <div className="shrink-0 flex items-center justify-between p-4 bg-[#18181b] border-b border-white/5 relative z-20 shadow-md">
+      <div className="shrink-0 flex items-center justify-between p-4 bg-hero-sidebar border-b border-hero-border relative z-20 shadow-md">
         
         {/* Breadcrumb / Nav */}
         <div className="flex items-center gap-4 relative">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#e3b044] text-white flex items-center justify-center font-black text-lg border border-white/10 shrink-0">
+            <div className="w-8 h-8 rounded-full bg-[#e3b044] text-hero-text flex items-center justify-center font-black text-lg border border-hero-border shrink-0">
               🍌
             </div>
             <div className="flex flex-col">
-              <h2 className="text-[10px] font-black italic tracking-widest text-white/50 flex items-center gap-2 uppercase">
+              <h2 className="text-[10px] font-black italic tracking-widest text-hero-muted flex items-center gap-2 uppercase">
                 GAMEBANANA
               </h2>
             </div>
@@ -308,13 +308,13 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
         {/* Search, Sort, Scale */}
         <div className="flex items-center gap-2 flex-1 max-w-lg ml-4">
           <div className="relative flex-1 min-w-0">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-white/30"/>
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-hero-text/30"/>
             <input 
               type="text" 
               placeholder="Search mods..." 
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 text-xs bg-black/40 border border-white/10 rounded-lg text-white placeholder:text-white/20 focus:border-[#e3b044] outline-none transition-colors"
+              className="w-full pl-9 pr-4 py-2 text-xs bg-black/40 border border-hero-border rounded-lg text-hero-text placeholder:text-hero-text/20 focus:border-[#e3b044] outline-none transition-colors"
             />
           </div>
 
@@ -325,7 +325,7 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
               className={`flex items-center gap-2 px-3 py-2 text-xs font-bold rounded-lg border transition-all ${
                 activeTags.length > 0 
                   ? 'bg-[#e3b044]/10 border-[#e3b044]/30 text-[#e3b044]' 
-                  : 'bg-black/40 border-white/10 text-white/70 hover:bg-white/5 hover:text-white'
+                  : 'bg-black/40 border-hero-border text-hero-textSecondary hover:bg-hero-surface hover:text-hero-text'
               }`}
             >
               <Filter size={14} />
@@ -339,27 +339,27 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
             </button>
 
             {showTagDropdown && (
-              <div className="absolute top-full right-0 mt-2 w-56 bg-[#18181b] border border-white/10 rounded-xl shadow-2xl py-2 overflow-hidden backdrop-blur-xl">
-                <div className="px-4 py-2 text-xs font-black uppercase text-white/40 border-b border-white/5 mb-1 flex items-center justify-between">
+              <div className="absolute top-full right-0 mt-2 w-56 bg-hero-sidebar border border-hero-border rounded-xl shadow-2xl py-2 overflow-hidden backdrop-blur-xl">
+                <div className="px-4 py-2 text-xs font-black uppercase text-hero-muted border-b border-hero-border mb-1 flex items-center justify-between">
                   <span>Characters</span>
                   {activeTags.length > 0 && (
                     <button 
                       onClick={() => setActiveTags([])}
-                      className="text-[#e3b044] hover:text-white transition-colors"
+                      className="text-[#e3b044] hover:text-hero-text transition-colors"
                     >Clear</button>
                   )}
                 </div>
                 <div className="max-h-64 overflow-y-auto custom-scrollbar">
                   {allTags.length === 0 ? (
-                    <div className="px-4 py-3 text-xs text-white/30 italic">No characters found in loaded mods</div>
+                    <div className="px-4 py-3 text-xs text-hero-text/30 italic">No characters found in loaded mods</div>
                   ) : (
                     allTags.map(tag => (
                       <button
                         key={tag}
                         onClick={() => toggleTag(tag)}
-                        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-left hover:bg-white/5 transition-colors group"
+                        className="w-full flex items-center justify-between px-4 py-2.5 text-xs text-left hover:bg-hero-surface transition-colors group"
                       >
-                        <span className={`font-bold transition-colors ${activeTags.includes(tag) ? 'text-[#e3b044]' : 'text-white/70 group-hover:text-white'}`}>
+                        <span className={`font-bold transition-colors ${activeTags.includes(tag) ? 'text-[#e3b044]' : 'text-hero-textSecondary group-hover:text-hero-text'}`}>
                           {tag}
                         </span>
                         {activeTags.includes(tag) && (
@@ -374,7 +374,7 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
           </div>
           
           <div className="flex items-center gap-1.5 px-2 mx-1 shrink-0 hidden sm:flex">
-            <span className="text-[9px] text-white/40 font-bold uppercase select-none" title="Scale Icons">A</span>
+            <span className="text-[9px] text-hero-muted font-bold uppercase select-none" title="Scale Icons">A</span>
             <input 
               type="range" 
               min="120" 
@@ -388,7 +388,7 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
               className="w-16 h-1 bg-white/10 rounded-full appearance-none cursor-pointer hover:bg-white/20 transition-colors"
               style={{ accentColor: "#e3b044" }}
             />
-            <span className="text-sm text-white/60 font-bold uppercase select-none" title="Scale Icons">A</span>
+            <span className="text-sm text-hero-text/60 font-bold uppercase select-none" title="Scale Icons">A</span>
           </div>
         </div>
         
@@ -396,14 +396,14 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
         <div className="ml-auto flex items-center gap-2">
           <div className="hidden md:flex items-center gap-2">
             {loading && <div className="w-1.5 h-1.5 rounded-full bg-[#e3b044] animate-pulse shadow-[0_0_8px_rgba(227,176,68,0.8)]"></div>}
-            <span className={`text-xs transition-all duration-300 font-bold tracking-wide ${loading ? 'text-[#e3b044]' : 'text-white/30'}`}>
+            <span className={`text-xs transition-all duration-300 font-bold tracking-wide ${loading ? 'text-[#e3b044]' : 'text-hero-text/30'}`}>
               {status}
             </span>
           </div>
           <button 
             onClick={handleRefresh}
             disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#e3b044] hover:bg-[#c99a36] disabled:opacity-50 text-white rounded-lg transition-all"
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold bg-[#e3b044] hover:bg-[#c99a36] disabled:opacity-50 text-hero-text rounded-lg transition-all"
           >
             <RefreshCw size={14} className={loading ? "animate-spin" : ""} /> Refresh
           </button>
@@ -429,15 +429,15 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
             />
           ))}
           {loading && Array.from({length: 4}).map((_, i) => (
-            <div key={`skel-${i}`} className="bg-hero-card/40 border border-white/5 rounded-xl h-64 animate-pulse"></div>
+            <div key={`skel-${i}`} className="bg-hero-card/40 border border-hero-border rounded-xl h-64 animate-pulse"></div>
           ))}
           {!loading && filteredMods.length === 0 && (
             <div className="col-span-full py-20 text-center flex flex-col items-center justify-center">
-              <div className="w-16 h-16 rounded-full bg-white/5 flex items-center justify-center text-white/20 mb-4">
+              <div className="w-16 h-16 rounded-full bg-hero-surface flex items-center justify-center text-hero-text/20 mb-4">
                 <Search size={24} />
               </div>
-              <h3 className="text-xl font-bold text-white mb-2">No mods found</h3>
-              <p className="text-white/40">Try adjusting your search</p>
+              <h3 className="text-xl font-bold text-hero-text mb-2">No mods found</h3>
+              <p className="text-hero-muted">Try adjusting your search</p>
             </div>
           )}
         </div>
@@ -450,7 +450,7 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
                 <RefreshCw size={14} className="animate-spin" /> Loading more...
               </div>
             ) : !hasMore ? (
-              <div className="text-white/30 text-sm font-bold">No more mods available</div>
+              <div className="text-hero-text/30 text-sm font-bold">No more mods available</div>
             ) : null}
           </div>
         )}

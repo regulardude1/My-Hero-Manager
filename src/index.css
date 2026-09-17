@@ -1,16 +1,98 @@
 @import "tailwindcss";
 
+:root, [data-theme="default"] {
+  /* Main Backgrounds */
+  --hero-bg: #09090b;
+  --hero-sidebar: #18181b;
+  --hero-card: #27272a;
+  
+  /* Surfaces (Overlays) */
+  --hero-surface: rgba(255, 255, 255, 0.05);
+  --hero-surface-hover: rgba(255, 255, 255, 0.1);
+  --hero-surface-active: rgba(255, 255, 255, 0.15);
+  
+  /* Borders */
+  --hero-border: rgba(255, 255, 255, 0.1);
+  --hero-border-hover: rgba(255, 255, 255, 0.2);
+  
+  /* Text */
+  --hero-text: #fafafa;
+  --hero-text-muted: #a1a1aa;
+  --hero-text-secondary: rgba(255, 255, 255, 0.4);
+  --hero-text-inverse: #000000;
+  
+  /* Brand/Accents */
+  --hero-accent: #facc15;
+  --hero-accent-hover: #eab308;
+  
+  --hero-secondary: #3b82f6;
+  --hero-secondary-hover: #2563eb;
+  
+  --hero-danger: #ef4444;
+  --hero-success: #22c55e;
+}
+
+[data-theme="light"] {
+  /* Main Backgrounds */
+  --hero-bg: #f8fafc;
+  --hero-sidebar: #f1f5f9;
+  --hero-card: #ffffff;
+  
+  /* Surfaces (Overlays) */
+  --hero-surface: rgba(0, 0, 0, 0.05);
+  --hero-surface-hover: rgba(0, 0, 0, 0.08);
+  --hero-surface-active: rgba(0, 0, 0, 0.12);
+  
+  /* Borders */
+  --hero-border: rgba(0, 0, 0, 0.1);
+  --hero-border-hover: rgba(0, 0, 0, 0.2);
+  
+  /* Text */
+  --hero-text: #0f172a;
+  --hero-text-muted: #64748b;
+  --hero-text-secondary: rgba(0, 0, 0, 0.5);
+  --hero-text-inverse: #ffffff;
+  
+  /* Brand/Accents */
+  --hero-accent: #eab308;
+  --hero-accent-hover: #ca8a04;
+  
+  --hero-secondary: #2563eb;
+  --hero-secondary-hover: #1d4ed8;
+  
+  --hero-danger: #dc2626;
+  --hero-success: #16a34a;
+}
+
 @theme {
-  --color-hero-bg: #09090b;       /* Very dark zinc */
-  --color-hero-sidebar: #18181b;  /* Dark zinc for sidebar */
-  --color-hero-card: #27272a;     /* Lighter zinc for cards */
-  --color-hero-primary: #facc15;  /* Vibrant Yellow (Plus Ultra!) */
-  --color-hero-primaryHover: #eab308;
-  --color-hero-accent: #3b82f6;   /* Hero Blue */
-  --color-hero-accentHover: #2563eb;
-  --color-hero-danger: #ef4444;   /* Bakugo Red */
-  --color-hero-text: #fafafa;
-  --color-hero-muted: #a1a1aa;
+  --color-hero-bg: var(--hero-bg);
+  --color-hero-sidebar: var(--hero-sidebar);
+  --color-hero-card: var(--hero-card);
+  
+  --color-hero-surface: var(--hero-surface);
+  --color-hero-surfaceHover: var(--hero-surface-hover);
+  --color-hero-surfaceActive: var(--hero-surface-active);
+  
+  --color-hero-border: var(--hero-border);
+  --color-hero-borderHover: var(--hero-border-hover);
+  
+  --color-hero-text: var(--hero-text);
+  --color-hero-muted: var(--hero-text-muted);
+  --color-hero-textSecondary: var(--hero-text-secondary);
+  --color-hero-textInverse: var(--hero-text-inverse);
+  
+  --color-hero-accent: var(--hero-accent);
+  --color-hero-accentHover: var(--hero-accent-hover);
+  
+  --color-hero-secondary: var(--hero-secondary);
+  --color-hero-secondaryHover: var(--hero-secondary-hover);
+  
+  --color-hero-danger: var(--hero-danger);
+  --color-hero-success: var(--hero-success);
+  
+  /* Backwards compatibility for existing un-refactored components */
+  --color-hero-primary: var(--hero-accent);
+  --color-hero-primaryHover: var(--hero-accent-hover);
 }
 
 @layer base {
@@ -19,6 +101,14 @@
     color: var(--color-hero-text);
     margin: 0;
     overflow: hidden;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  /* Universal transition for theme swapping elements */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 200ms;
   }
 }
 
@@ -36,7 +126,7 @@
   border: 1px solid var(--color-hero-bg);
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-hero-primary);
+  background: var(--color-hero-accent);
 }
 
 @keyframes breathe {
