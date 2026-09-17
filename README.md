@@ -2,6 +2,17 @@
 
 A mod manager for My Hero Ultra Rumble. Still a work in progress.
 
+## Features
+
+- Install mods by drag and drop (.pak, .zip, .rar), or download them from the built-in stores
+- Browse and search mods from Discord, GameBanana, and NexusMods
+- 3D preview of skin mods, and emote preview with the actual animation and sound
+- Skin Swapper — swap costume meshes between characters
+- Mod Merger — combine multiple mods into one
+- Organize your library: custom collections, filter by character or category, sortable columns, enable/disable mods
+- Themes with custom colors (background, sidebar, panels, text, accent)
+- Minimize to tray, and it checks for new versions on its own
+
 ## Using the app
 
 - Windows 10/11, with the game installed
