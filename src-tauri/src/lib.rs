@@ -3097,11 +3097,20 @@ fn restore_to_default(game_path: Option<String>) -> Result<(), String> {
 use std::path::PathBuf;
 
 #[tauri::command]
-async fn get_costumes(game_path: String, character_id: String) -> Result<Vec<serde_json::Value>, String> {
+async fn get_costumes(game_path: String, mut character_id: String) -> Result<Vec<serde_json::Value>, String> {
     let app_dir = get_data_dir().join("cache");
     
     if character_id.is_empty() {
         return Err("Character ID is empty.".into());
+    }
+    
+    // Accept a character display name (e.g. "Mirko") when the caller doesn't
+    // have scanned file data to extract ChXXX from.
+    let map = get_characters_map();
+    if !map.contains_key(&character_id) {
+        if let Some((id, _)) = map.iter().find(|(_, name)| *name == &character_id) {
+            character_id = format!("Ch{}", id);
+        }
     }
     
     let tools_dir = get_tools_dir();
@@ -3311,8 +3320,60 @@ async fn get_costumes(game_path: String, character_id: String) -> Result<Vec<ser
     Ok(costumes)
 }
 
+/// List the file entries inside a mod's .pak (fast, no umodel scan).
+/// Used to figure out which costume slot(s) the mod actually modifies.
 #[tauri::command]
-async fn swap_skin_slot(mod_id: String, mod_path: String, target_slot: String) -> Result<String, String> {
+async fn get_mod_file_list(mod_path: String) -> Result<Vec<String>, String> {
+    let tools_dir = get_tools_dir();
+    let repak_exe = tools_dir.join("repak.exe");
+    if !repak_exe.exists() {
+        return Err("repak.exe not found in tools directory".into());
+    }
+
+    let assets_dir = Path::new(&mod_path).join("assets");
+    let mut pak_file = None;
+    if let Ok(entries) = fs::read_dir(&assets_dir) {
+        for entry in entries.flatten() {
+            if entry.path().extension().and_then(|s| s.to_str()) == Some("pak") {
+                pak_file = Some(entry.path());
+                break;
+            }
+        }
+    }
+    let pak_file = pak_file.ok_or("No .pak file found in mod assets")?;
+    let pak_str = pak_file.to_string_lossy().to_string();
+
+    // Try without an AES key first (most community mods aren't encrypted),
+    // then retry with the game key for encrypted paks.
+    let attempts: Vec<Vec<String>> = vec![
+        vec!["list".to_string(), pak_str.clone()],
+        vec!["-a".to_string(), "0x332F41B1130F125444A35F420EC6D05EA3E27A972A36DAD90C83FC6958D941C7".to_string(), "list".to_string(), pak_str],
+    ];
+
+    let mut last_err = String::from("repak list failed");
+    for args in &attempts {
+        let output = std::process::Command::new(&repak_exe)
+            .args(args)
+            .creation_flags(0x08000000)
+            .output()
+            .map_err(|e| e.to_string())?;
+        if output.status.success() {
+            let listing = String::from_utf8_lossy(&output.stdout).to_string();
+            let files: Vec<String> = listing
+                .lines()
+                .map(|l| l.trim().to_string())
+                .filter(|l| !l.is_empty() && l.to_ascii_lowercase().contains("model/"))
+                .collect();
+            return Ok(files);
+        }
+        last_err = String::from_utf8_lossy(&output.stderr).to_string();
+    }
+
+    Err(format!("Failed to list pak contents: {}", last_err))
+}
+
+#[tauri::command]
+async fn swap_skin_slot(mod_id: String, mod_path: String, mode: String, source_slot: String, target_slot: String, game_path: Option<String>) -> Result<String, String> {
     let project_root = get_data_dir();
     let tools_dir = get_tools_dir();
     
@@ -3327,6 +3388,26 @@ async fn swap_skin_slot(mod_id: String, mod_path: String, target_slot: String) -
     if !engine_script.exists() || !uejson_path.exists() || !repak_exe.exists() || !unrealpak_exe.exists() {
         return Err("Missing required tools for skin swapping (repak, UnrealPak, UEJSON, etc).".into());
     }
+    
+    // Resolve the game pak (the engine reads the target slot's material + texture names from it)
+    let aes_key = "0x332F41B1130F125444A35F420EC6D05EA3E27A972A36DAD90C83FC6958D941C7";
+    let game_pak = match game_path {
+        Some(gp) => {
+            let mut pak = std::path::PathBuf::from(gp);
+            if !pak.to_string_lossy().ends_with(".pak") {
+                if pak.ends_with("Paks") {
+                    pak = pak.join("HerovsGame-WindowsNoEditor.pak");
+                } else {
+                    pak = pak.join("HerovsGame").join("Content").join("Paks").join("HerovsGame-WindowsNoEditor.pak");
+                }
+            }
+            if !pak.exists() {
+                return Err(format!("Could not find the game .pak file at {}", pak.display()));
+            }
+            Some(pak)
+        }
+        None => None,
+    };
     
     let assets_dir = Path::new(&mod_path).join("assets");
     let mut pak_file = None;
@@ -3363,11 +3444,21 @@ async fn swap_skin_slot(mod_id: String, mod_path: String, target_slot: String) -
     }
     
     // 2. Run Python Engine on the extracted folder
-    let output = Command::new(&python_exe)
+    let mut engine_cmd = Command::new(&python_exe);
+    engine_cmd
         .arg(&engine_script)
         .arg(&temp_dir)
-        .arg(&target_slot)
         .arg(&uejson_path)
+        .arg(&mode)
+        .arg(&source_slot)
+        .arg(&target_slot);
+    if let Some(gp) = &game_pak {
+        engine_cmd
+            .arg(gp)
+            .arg(&repak_exe)
+            .arg(aes_key);
+    }
+    let output = engine_cmd
         .creation_flags(0x08000000)
         .output()
         .map_err(|e| {
@@ -3877,6 +3968,7 @@ pub fn run() {
             open_mod_folder,
             open_path,
             swap_skin_slot,
+            get_mod_file_list,
             get_costumes,
             set_minimize_to_tray,
             restore_to_default,

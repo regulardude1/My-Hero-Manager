@@ -33,6 +33,7 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
   const [isLoadingCostumes, setIsLoadingCostumes] = useState(false);
   const [costumeError, setCostumeError] = useState<string | null>(null);
   
+  const [slotWarning, setSlotWarning] = useState<string | null>(null);
   const [isSwapping, setIsSwapping] = useState(false);
   const [swapperMode, setSwapperMode] = useState<"swap" | "add" | "remove">("swap");
   const [sourceSlot, setSourceSlot] = useState<string | null>(null);
@@ -44,21 +45,26 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
   // Group skin mods by character
   const charactersWithSkins = useMemo(() => {
     const skinMods = mods.filter(m => {
-        if (m.category !== "Skin" || !m.character || m.character === "All" || !m.modified_files) {
+        if (m.category !== "Skin" || !m.character || m.character === "All") {
             return false;
         }
         
-        // Ensure this is actually a costume skin, not an item/weapon mod
-        // Costumes in MHUR are stored in specific subfolders under /Model/
-        return m.modified_files.some(file => 
-            file.includes("/Model/Default") || 
-            file.includes("/Model/Costume") ||
-            file.includes("/Model/Eq") ||
-            file.includes("/Model/Sp") ||
-            file.includes("/Model/Fm") ||
-            file.includes("/Model/Or") ||
-            file.includes("/Model/Jr")
-        );
+        // When file data is available, ensure this is actually a costume skin,
+        // not an item/weapon mod. Costumes in MHUR are stored in specific
+        // subfolders under /Model/. Mods without scan data fall back to their
+        // category + character classification alone.
+        if (m.modified_files && m.modified_files.length > 0) {
+            return m.modified_files.some(file => 
+                file.includes("/Model/Default") || 
+                file.includes("/Model/Costume") ||
+                file.includes("/Model/Eq") ||
+                file.includes("/Model/Sp") ||
+                file.includes("/Model/Fm") ||
+                file.includes("/Model/Or") ||
+                file.includes("/Model/Jr")
+            );
+        }
+        return true;
     });
     
     const grouped = skinMods.reduce((acc, mod) => {
@@ -108,7 +114,10 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
   useEffect(() => {
     if (selectedMod) {
       const updatedMod = mods.find(m => m.id === selectedMod.id);
-      if (updatedMod && JSON.stringify(updatedMod.modified_files) !== JSON.stringify(selectedMod.modified_files)) {
+      // Only adopt the refreshed mod if it actually carries file data, so we
+      // don't wipe out the slot detection we fetched for the selected mod.
+      if (updatedMod && (updatedMod.modified_files?.length ?? 0) > 0 &&
+          JSON.stringify(updatedMod.modified_files) !== JSON.stringify(selectedMod.modified_files)) {
         setSelectedMod(updatedMod);
       }
     }
@@ -135,6 +144,20 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
     setCostumes([]);
     setCostumeError(null);
     setSourceSlot(null);
+    setSlotWarning(null);
+    
+    // Mods scanned without file data don't know their slot yet. List the pak
+    // entries (fast) so the MODDED badge and source-slot detection work.
+    if (!mod.modified_files || mod.modified_files.length === 0) {
+      try {
+        const files: string[] = await invoke("get_mod_file_list", { modPath: mod.folder_path });
+        if (files.length > 0) {
+          setSelectedMod({ ...mod, modified_files: files });
+        }
+      } catch (e: any) {
+        setSlotWarning(`Could not detect which slot this mod replaces: ${e}`);
+      }
+    }
     
     if (!gamePath) {
       setCostumeError("Game path is not configured. Please set the My Hero Ultra Rumble path in Settings to extract game thumbnails.");
@@ -154,8 +177,14 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
     }
 
     if (!characterId) {
-        setCostumeError("Could not determine the internal character ID (ChXXX) for this mod from its file structure.");
-        return;
+        // No scan data to extract ChXXX from; send the character display name
+        // and let the backend resolve it against the character map.
+        if (mod.character && mod.character !== "All") {
+            characterId = mod.character;
+        } else {
+            setCostumeError("Could not determine the character for this mod.");
+            return;
+        }
     }
 
     setIsLoadingCostumes(true);
@@ -186,14 +215,26 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
     setIsSwapping(true);
     setSwapResult(null);
     try {
-      const result = await invoke<string>("modify_skin_slot", {
+      const result = await invoke<string>("swap_skin_slot", {
         modId: selectedMod.id,
         modPath: selectedMod.folder_path,
         mode: swapperMode,
         sourceSlot: actualSource,
-        targetSlot: actualTarget
+        targetSlot: actualTarget,
+        gamePath: gamePath
       });
       setSwapResult({ success: true, message: result });
+      
+      // The pak was just repacked for a new slot — refresh the detected files
+      // so the MODDED badge moves to the slot the mod now replaces.
+      try {
+        const files: string[] = await invoke("get_mod_file_list", { modPath: selectedMod.folder_path });
+        if (files.length > 0) {
+          setSelectedMod({ ...selectedMod, modified_files: files });
+        }
+      } catch {
+        // Keep the previous detection if the refresh fails
+      }
       
       // We don't need optimistic UI updates anymore since onModUpdated will trigger 
       // a full backend rescan (via fetchMods in App.tsx), which is more robust.
@@ -215,17 +256,33 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
   // Helper to determine if the mod is already mapped to this slot
   const isCurrentSlot = (mod: Mod, slotId: string) => {
     if (!mod.modified_files) return false;
-    
+
+    // Only the actual costume mesh counts. Skeleton / PhysicsAsset companion
+    // files always keep their "Default" names and paths even after a swap,
+    // so counting them would pin the badge to the old slot forever.
+    const meshFiles = mod.modified_files.filter(f =>
+      /\/mesh\//i.test(f) && !/physicsasset|skeleton/i.test(f)
+    );
+
+    // 1. Name-based (most reliable): the mesh name embeds the slot token.
+    //    sk_ch102_spd1_00 -> Sp_D1_00 | sk_ch102_default_00 -> Default
+    //    Textures/materials follow the same convention (T_Ch102_SpD1_00_...)
+    let slotToken = slotId.toLowerCase();
+    const m = slotId.match(/^([A-Za-z]{2})_(.+)$/);
+    if (slotId !== "Default" && m) slotToken = (m[1] + m[2]).toLowerCase();
+    if (slotId === "Default") slotToken = "default_00";
+    if (meshFiles.some(f => f.toLowerCase().includes(slotToken))) return true;
+
+    // 2. Path-based fallback (e.g. a mesh named generically inside the slot folder)
     if (slotId === "Default") {
-        return mod.modified_files.some(file => file.includes("/Model/Default/Mesh/") || file.toLowerCase().includes("/model/default/mesh/"));
+      return meshFiles.some(f => f.toLowerCase().includes("/model/default/mesh/"));
     }
-    
-    // For slots like Eq_A1_00, the file path might be /Model/Eq_A1_00/ or /Model/Eq/A1_00/
+
     const searchWithUnderscore = `/Model/${slotId}/Mesh/`.toLowerCase();
     const searchWithSlash = `/Model/${slotId.replace('_', '/')}/Mesh/`.toLowerCase();
-    
-    return mod.modified_files.some(file => 
-      file.toLowerCase().includes(searchWithUnderscore) || file.toLowerCase().includes(searchWithSlash)
+
+    return meshFiles.some(f =>
+      f.toLowerCase().includes(searchWithUnderscore) || f.toLowerCase().includes(searchWithSlash)
     );
   };
 
@@ -359,6 +416,11 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
                   </button>
                 </div>
 
+                {slotWarning && (
+                  <div className="mb-4 px-4 py-2 rounded-lg border border-yellow-500/40 bg-yellow-500/10 text-yellow-300 text-xs">
+                    {slotWarning} If this mentions a missing command, restart the app so the latest backend is loaded.
+                  </div>
+                )}
                 {isLoadingCostumes ? (
                   <div className="flex-1 flex flex-col items-center justify-center bg-black/20 rounded-xl border border-hero-border p-12">
                     <RefreshCw size={48} className="text-hero-accent animate-spin mb-4" />
