@@ -42,6 +42,7 @@ tools/ffmpeg.exe
 
 # Unused / scratch
 Unused/
+notes.md
 
 # Python bytecode
 **/__pycache__/

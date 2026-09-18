@@ -1,10 +1,8 @@
 import { useState, useEffect, useMemo } from "react";
-import { FolderOpen, Globe, Settings, GripHorizontal, Search, CheckSquare, Square, Play, Eye, Upload, X, Plus, Edit2, Folder, FolderPlus, ChevronDown, ChevronRight, Trash2, ArrowDown, ArrowUp, Shuffle, MoreVertical, Save, Info, Merge, LogOut, AlertTriangle, Gamepad2, Download, ListChecks } from "lucide-react";
+import { FolderOpen, Globe, Settings, Search, CheckSquare, Play, Upload, X, Plus, Edit2, Folder, FolderPlus, ChevronDown, ChevronRight, Trash2, Shuffle, MoreVertical, Save, Info, Merge, LogOut, AlertTriangle, Gamepad2, Download, ListChecks } from "lucide-react";
 import { invoke } from '@tauri-apps/api/core';
 import { open } from '@tauri-apps/plugin-dialog';
-import { openUrl } from '@tauri-apps/plugin-opener';
 import { listen } from '@tauri-apps/api/event';
-import ModelViewer from "./ModelViewer";
 import DiscordStore from "./DiscordStore";
 import GameBananaStore from "./GameBananaStore";
 import ModDiscovery from "./ModDiscovery";
@@ -12,26 +10,14 @@ import SkinSwapper from "./SkinSwapper";
 import NexusModsStore from "./NexusModsStore";
 import ModMerger from "./ModMerger";
 import { useTheme, THEMES } from "./theme";
-import { 
-  DndContext, 
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-  useDraggable,
-  useDroppable,
-  pointerWithin,
-  DragOverlay,
-  useDndContext
-} from '@dnd-kit/core';
-import { 
-  arrayMove, 
-  SortableContext, 
-  horizontalListSortingStrategy, 
-  useSortable 
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { DragEndEvent } from '@dnd-kit/core';
+import { arrayMove } from '@dnd-kit/sortable';
 import { Component, ReactNode } from 'react';
+import { Mod, ContextMenuState, ModFolder, getBaseFilename, extractSlotFromMod } from "./utils/mods";
+import { NavItem, FilterItem, RenameFolderInput } from "./components/ui";
+import { ModDetailsModal } from "./components/ModDetailsModal";
+import { useCollections } from "./hooks/useCollections";
+import ModTable, { INITIAL_COLUMNS } from "./components/ModTable";
 
 class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: string, stack: string }> {
   constructor(props: { children: ReactNode }) {
@@ -66,138 +52,6 @@ class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError:
     return this.props.children;
   }
 }
-
-const INITIAL_COLUMNS = [
-  { id: "name", label: "Mod Name", width: "flex-1" },
-  { id: "author", label: "Creator", width: "w-32" },
-  { id: "version", label: "Ver", width: "w-20" },
-  { id: "category", label: "Category", width: "w-32" },
-  { id: "character", label: "Character", width: "w-40" }
-];
-
-// We will load the mods dynamically from the Rust backend
-type Mod = {
-  id: string;
-  name: string;
-  author: string;
-  version: string;
-  category: string;
-  character: string;
-  active: boolean;
-  folder_path: string;
-  modified_files: string[];
-  created_at: number;
-  url?: string;
-  pak_name?: string;
-  pak_size?: number;
-  pak_hash?: string;
-};
-
-type ContextMenuState = { x: number; y: number; modId: string } | null;
-type Collection = { id: string; name: string; activeMods: string[] };
-type ModFolder = { id: string; name: string; modIds: string[]; };
-
-const getBaseFilename = (filepath: string) => {
-  // Strip out costume slots to get the base structural file path
-  return filepath.replace(/\/Model\/(Default|Costume_\d+|Or\/[^\/]+|Eq\/[^\/]+|Sp\/[^\/]+)\//, '/Model/<SLOT>/');
-};
-
-const extractSlotFromMod = (mod: Mod): string => {
-  if (mod.category === "Emote") {
-    for (const file of mod.modified_files) {
-      const match = file.match(/\/(?:em|EmotionAct|Emote)[_-]?(\d{2,3})/i);
-      if (match) return `em${match[1]}`;
-    }
-  } else if (mod.category === "Skin" || mod.category === "Costume") {
-    for (const file of mod.modified_files) {
-      const match = file.match(/\/Model\/(Default|Costume_\d+|Sp\/[^\/]+)\//);
-      if (match) {
-        if (match[1].startsWith("Sp/")) return match[1].replace("Sp/", "Sp_");
-        return match[1];
-      }
-    }
-  } else if (mod.category === "Voice") {
-    for (const file of mod.modified_files) {
-      const match = file.match(/\/Voice\/([^\/]+)\//i);
-      if (match) return match[1];
-    }
-  }
-  return "Unknown";
-};
-
-const getModDescription = (mod: Mod) => {
-  if (!mod.modified_files || mod.modified_files.length === 0) return "No detailed file information available.";
-  
-  const costumes = new Set<string>();
-  let hasUi = false;
-  let hasAudio = false;
-  let isEmote = mod.category === "Emote";
-  
-  mod.modified_files.forEach(file => {
-    if (file.includes("/Model/Default/")) costumes.add("Default Costume");
-    else if (file.includes("/Model/Costume_01/")) costumes.add("Costume 01");
-    else if (file.includes("/Model/Costume_02/")) costumes.add("Costume 02");
-    else if (file.includes("/Model/Costume_03/")) costumes.add("Costume 03");
-    else if (file.includes("/Model/Sp/")) {
-       const match = file.match(/\/Model\/Sp\/([^\/]+)\//);
-       if (match) costumes.add(`Special Costume (${match[1]})`);
-    }
-    
-    if (file.includes("/UI/") || file.includes("/GUI/")) hasUi = true;
-    if (file.includes("/Sound/") || file.includes("/Audio/")) hasAudio = true;
-  });
-  
-  let lines = [];
-  if (costumes.size > 0) {
-    lines.push(`• Overwrites: ${Array.from(costumes).join(", ")}`);
-  }
-  if (isEmote) {
-     lines.push("• Modifies Emote Animations/Audio");
-  }
-  if (hasUi) lines.push("• Includes UI/HUD modifications");
-  if (hasAudio) lines.push("• Includes Custom Sound/Audio");
-  
-  if (lines.length === 0) {
-    return "• Modifies core game files: " + mod.modified_files[0].split('/').pop();
-  }
-  
-  return lines.join("\n");
-};
-
-function SortableHeader({ id, label, width, sortConfig, onSort }: { id: string, label: string, width: string, sortConfig: { key: string, direction: 'asc' | 'desc' } | null, onSort: (key: string) => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id });
-
-  const style = {
-    transform: CSS.Translate.toString(transform),
-    transition,
-    zIndex: isDragging ? 10 : 1,
-    opacity: isDragging ? 0.6 : 1,
-  };
-
-  return (
-    <div 
-      ref={setNodeRef} 
-      style={style} 
-      className={`${width} min-w-0 flex items-center gap-2 text-[11px] font-black uppercase tracking-widest text-hero-muted transition-colors relative group py-2`}
-    >
-      <div {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing p-1 -ml-1 hover:bg-hero-surface rounded-sm">
-        <GripHorizontal size={14} className="opacity-0 group-hover:opacity-100 transition-opacity text-hero-accent" />
-      </div>
-      <div 
-        className="flex items-center gap-1.5 flex-1 cursor-pointer hover:text-hero-accent select-none py-1"
-        onClick={() => onSort(id)}
-      >
-        {label}
-        {sortConfig?.key === id && (
-          <span className="text-hero-accent">
-            {sortConfig.direction === 'desc' ? <ArrowDown size={14} /> : <ArrowUp size={14} />}
-          </span>
-        )}
-      </div>
-    </div>
-  );
-}
-
 
 const TUTORIAL_STEPS = [
   {
@@ -309,10 +163,6 @@ function App() {
   const [renamingCollectionId, setRenamingCollectionId] = useState<string | null>(null);
   const [renamingText, setRenamingText] = useState("");
   const [viewingModDetailsId, setViewingModDetailsId] = useState<string | null>(null);
-  const [collections, setCollections] = useState<Collection[]>(() => {
-    try { return JSON.parse(localStorage.getItem("plus_ultra_collections") || "[]"); }
-    catch { return []; }
-  });
   const [isCreatingCollection, setIsCreatingCollection] = useState(false);
   const [newCollectionName, setNewCollectionName] = useState("");
   const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' } | null>({ key: 'created_at', direction: 'desc' });
@@ -462,63 +312,13 @@ function App() {
       })
       .catch(console.error);
 
-    invoke<string>("load_collections_json")
-      .then((raw) => {
-        try {
-          const parsed = JSON.parse(raw);
-          if (Array.isArray(parsed) && parsed.length > 0) {
-            setCollections(parsed);
-            localStorage.setItem("plus_ultra_collections", raw);
-          }
-        } catch (e) { console.error(e); }
-      })
-      .catch(console.error);
   }, []);
-
-  const saveCollections = (cols: Collection[]) => {
-    setCollections(cols);
-    const json = JSON.stringify(cols);
-    localStorage.setItem("plus_ultra_collections", json);
-    invoke("save_collections_json", { collectionsJson: json }).catch(console.error);
-  };
 
   const handleCreateCollection = () => {
     if (!newCollectionName.trim()) return;
-    const newCol: Collection = {
-      id: Date.now().toString(),
-      name: newCollectionName.trim(),
-      activeMods: mods.filter(m => m.active).map(m => m.id)
-    };
-    saveCollections([...collections, newCol]);
+    createCollection(newCollectionName);
     setNewCollectionName("");
     setIsCreatingCollection(false);
-    setActiveCategory(newCol.id);
-  };
-
-  const handleApplyCollection = (colId: string) => {
-    const col = collections.find(c => c.id === colId);
-    if (!col) return;
-    const activeSet = new Set(col.activeMods);
-    const newMods = mods.map(m => ({ ...m, active: activeSet.has(m.id) }));
-    setMods(newMods);
-    setActiveCategory(colId);
-    computeConflicts(newMods);
-  };
-
-  const handleUpdateCollection = async (colId: string) => {
-    const cols = collections.map(c => {
-      if (c.id === colId) {
-        return { ...c, activeMods: mods.filter(m => m.active).map(m => m.id) };
-      }
-      return c;
-    });
-    saveCollections(cols);
-    await showAlert("Collection updated with current active mods!");
-  };
-
-  const handleDeleteCollection = (colId: string) => {
-    saveCollections(collections.filter(c => c.id !== colId));
-    if (activeCategory === colId) setActiveCategory("All Mods");
   };
 
   const handleRenameSubmit = async (modId: string) => {
@@ -536,12 +336,7 @@ function App() {
   };
 
   const handleRenameCollectionSubmit = (colId: string) => {
-    if (!renamingText.trim()) {
-      setRenamingCollectionId(null);
-      return;
-    }
-    const cols = collections.map(c => c.id === colId ? { ...c, name: renamingText.trim() } : c);
-    saveCollections(cols);
+    if (renamingText.trim()) renameCollection(colId, renamingText);
     setRenamingCollectionId(null);
   };
 
@@ -980,6 +775,15 @@ function App() {
     }
     setConflictSet(set);
   };
+
+  const { collections, createCollection, applyCollection, updateCollection, deleteCollection, renameCollection } = useCollections({
+    mods,
+    setMods,
+    activeCategory,
+    setActiveCategory,
+    computeConflicts,
+    showAlert
+  });
   
   useEffect(() => {
     invoke('get_characters').then((chars) => {
@@ -987,13 +791,7 @@ function App() {
     }).catch(console.error);
   }, []);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, {
-      activationConstraint: {
-        distance: 8,
-      },
-    })
-  );
+
 
   const filteredMods = useMemo(() => {
     return mods
@@ -1315,7 +1113,7 @@ function App() {
                       <input autoFocus type="text" value={renamingText} onChange={e => setRenamingText(e.target.value)} onBlur={() => handleRenameCollectionSubmit(col.id)} onKeyDown={e => { if (e.key === "Enter") handleRenameCollectionSubmit(col.id); if (e.key === "Escape") setRenamingCollectionId(null); }} className="bg-transparent text-xs text-hero-text outline-none w-full" onClick={e => e.stopPropagation()} />
                     </div>
                   ) : (
-                    <FilterItem label={col.name} count={col.activeMods.length} active={activeCategory === col.id} onClick={() => handleApplyCollection(col.id)} hideCountOnHover={true} forceHideCount={collectionMenu?.colId === col.id} />
+                    <FilterItem label={col.name} count={col.activeMods.length} active={activeCategory === col.id} onClick={() => applyCollection(col.id)} hideCountOnHover={true} forceHideCount={collectionMenu?.colId === col.id} />
                   )}
                 </div>
                 <button onClick={(e) => { e.stopPropagation(); const rect = e.currentTarget.getBoundingClientRect(); setCollectionMenu({ x: rect.right + 10, y: rect.top, colId: col.id }); }} className={`absolute right-3 text-hero-text hover:text-hero-accent transition-all p-1 rounded-sm ${collectionMenu?.colId === col.id ? 'opacity-100 text-hero-accent' : 'opacity-0 group-hover:opacity-100'}`}><MoreVertical size={16} /></button>
@@ -1540,100 +1338,30 @@ function App() {
 
           {/* ── Local Library Tab ── */}
           <div className={`flex-1 overflow-hidden ${activeTab === "Local" ? "grid" : "hidden"}`} style={{gridTemplateColumns: '55% 1fr'}}>
-              <div className="min-w-0 flex flex-col p-6 overflow-y-auto overflow-x-hidden custom-scrollbar border-r border-hero-border">
-                  <DndContext 
-                    sensors={sensors} 
-                    collisionDetection={pointerWithin} 
-                    onDragEnd={handleDragEnd}
-                  >
-                    <div className="flex items-center w-full min-w-0 px-4 pb-2 border-b-2 border-hero-border mb-4 select-none">
-                      <div className="w-12 shrink-0"></div>
-                      <div className="w-10 shrink-0"></div>
-                      <SortableContext items={columns.map(c => c.id)} strategy={horizontalListSortingStrategy}>
-                        {columns.map(col => (
-                          <SortableHeader key={col.id} id={col.id} label={col.label} width={col.width} sortConfig={sortConfig} onSort={handleSort} />
-                        ))}
-                      </SortableContext>
-                    </div>
-                    <div className="space-y-1.5 pb-10 select-none">
-                    {(() => {
-                      const folderedModIds = new Set(folders.flatMap(f => f.modIds));
-                      const items: any[] = [];
-                      folders.forEach(folder => {
-                        const children = filteredMods.filter(m => folder.modIds.includes(m.id));
-                        if (children.length > 0) items.push({ type: 'folder', folder, children });
-                      });
-                      filteredMods.forEach(mod => {
-                        if (!folderedModIds.has(mod.id)) items.push({ type: 'mod', mod });
-                      });
-                      const renderMod = (mod: Mod, isChild = false) => {
-                        const isConflicting = conflictSet.has(mod.id);
-                        return (
-                          <DraggableWrapper 
-                            id={`mod-${mod.id}`} 
-                            data={{ type: 'mod', modId: mod.id }}
-                            isChild={isChild}
-                            isConflicting={isConflicting}
-                            isSelected={selectedModIds.has(mod.id)}
-                            title={getModDescription(mod)}
-                            onClick={(e: any) => handleModClick(e, mod.id)}
-                            onContextMenu={(e: any) => {
-                              e.preventDefault();
-                              if (!selectedModIds.has(mod.id)) {
-                                setSelectedModIds(new Set([mod.id]));
-                                setLastClickedModId(mod.id);
-                              }
-                              setContextMenu({ x: e.pageX, y: e.pageY, modId: mod.id });
-                            }}
-                          >
-                            {isConflicting && (
-                              <div className="absolute top-0 right-0 px-2 py-0.5 bg-red-500 text-hero-text text-[9px] font-bold rounded-bl-sm uppercase tracking-wider shadow-lg z-10">
-                                Conflict Detected
-                              </div>
-                            )}
-                                <div className="w-12 shrink-0 text-hero-muted hover:text-hero-text transition-colors cursor-pointer" onClick={(e) => { e.stopPropagation(); toggleMod(mod.id); }}>
-                                  {mod.active ? <CheckSquare size={18} className="text-hero-accent" /> : <Square size={18} />}
-                                </div>
-                                <div className={`w-10 shrink-0 transition-colors ${selectedModIds.has(mod.id) ? 'text-hero-accent' : 'text-hero-text/20 group-hover:text-hero-text/60'}`}>
-                                  <Eye size={16} />
-                                </div>
-                                {columns.map(col => {
-                                  if (col.id === "name") return (
-                                    <div key={col.id} title={mod.name} className={`${col.width} min-w-0 font-bold text-hero-text truncate pr-4 text-[13px]`}>
-                                      {renamingModId === mod.id ? (
-                                        <input autoFocus type="text" value={renamingText} onChange={e => setRenamingText(e.target.value)} onBlur={() => handleRenameSubmit(mod.id)} onKeyDown={e => { if (e.key === "Enter") handleRenameSubmit(mod.id); if (e.key === "Escape") setRenamingModId(null); }} className="bg-hero-bg/50 border border-hero-accent text-hero-text px-2 py-0.5 rounded-sm outline-none w-[90%]" onClick={e => e.stopPropagation()} />
-                                      ) : mod.name}
-                                    </div>
-                                  );
-                                  if (col.id === "author") return <div key={col.id} className={`${col.width} shrink-0 text-xs font-medium text-hero-muted truncate pr-4`}>{mod.author}</div>;
-                                  if (col.id === "version") return <div key={col.id} className={`${col.width} shrink-0 text-[10px] font-bold text-hero-muted pr-4`}>{mod.version}</div>;
-                                  if (col.id === "category") return (
-                                    <div key={col.id} className={`${col.width} shrink-0 pr-4`}>
-                                      <span className="px-2 py-0.5 bg-hero-surface text-hero-muted text-[9px] font-bold uppercase tracking-wider rounded-sm border border-hero-border group-hover:border-hero-accent/20 group-hover:text-hero-accent transition-colors">{mod.category}</span>
-                                    </div>
-                                  );
-                                  if (col.id === "character") return <div key={col.id} className={`${col.width} shrink-0 text-xs font-medium text-hero-muted truncate pr-4`}>{mod.character}</div>;
-                                  return null;
-                                })}
-                          </DraggableWrapper>
-                        );
-                      };
-                      return items.map((item) => {
-                        if (item.type === 'mod') return renderMod(item.mod, false);
-                        else return <ModFolderRow key={item.folder.id} folder={item.folder} childrenMods={item.children} renderMod={renderMod} mods={mods} setMods={setMods} saveFolders={saveFolders} folders={folders} />;
-                      });
-                    })()}
-                    </div>
-                    <ActiveDragOverlay mods={mods} columns={columns} />
-                  </DndContext>
-              </div>
-              <div className="bg-black/40 relative min-w-0 min-h-0 overflow-hidden">
-                 <div className="absolute inset-0 bg-gradient-to-t from-hero-bg to-transparent z-0 opacity-80 pointer-events-none"></div>
-                 <div className="absolute inset-0 z-0 opacity-50 pointer-events-none" style={{ backgroundImage: 'radial-gradient(rgba(255, 255, 255, 0.05) 1px, transparent 1px)', backgroundSize: '30px 30px' }}></div>
-                 <div className="absolute inset-0 z-10">
-                   <ModelViewer selectedMod={mods.find(m => m.id === lastClickedModId)} />
-                 </div>
-              </div>
+            <ModTable
+              mods={mods}
+              filteredMods={filteredMods}
+              setMods={setMods}
+              folders={folders}
+              saveFolders={saveFolders}
+              conflictSet={conflictSet}
+              selectedModIds={selectedModIds}
+              setSelectedModIds={setSelectedModIds}
+              lastClickedModId={lastClickedModId}
+              setLastClickedModId={setLastClickedModId}
+              renamingModId={renamingModId}
+              setRenamingModId={setRenamingModId}
+              renamingText={renamingText}
+              setRenamingText={setRenamingText}
+              handleModClick={handleModClick}
+              toggleMod={toggleMod}
+              handleRenameSubmit={handleRenameSubmit}
+              setContextMenu={setContextMenu}
+              columns={columns}
+              sortConfig={sortConfig}
+              handleSort={handleSort}
+              handleDragEnd={handleDragEnd}
+            />
           </div>
 
           {/* ── Settings Tab ── */}
@@ -2439,7 +2167,7 @@ function App() {
           <button 
             className="w-full text-left px-4 py-2 text-xs text-hero-text/80 hover:bg-hero-surfaceHover hover:text-hero-text flex items-center gap-2"
             onClick={async () => {
-              handleUpdateCollection(collectionMenu.colId);
+              updateCollection(collectionMenu.colId);
               setCollectionMenu(null);
             }}
           ><CheckSquare size={12}/> Save Active Mods</button>
@@ -2449,7 +2177,7 @@ function App() {
           <button 
             className="w-full text-left px-4 py-2 text-xs text-red-400 hover:bg-red-500/20 hover:text-red-300 flex items-center gap-2"
             onClick={async () => {
-              handleDeleteCollection(collectionMenu.colId);
+              deleteCollection(collectionMenu.colId);
               setCollectionMenu(null);
             }}
           ><Trash2 size={12}/> Delete Collection</button>
@@ -2460,118 +2188,10 @@ function App() {
 
       {/* Mod Details Modal */}
       {viewingModDetailsId && (
-        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-[100] p-4 backdrop-blur-sm" onClick={() => setViewingModDetailsId(null)}>
-          <div 
-            className="bg-hero-sidebar border border-hero-border p-8 rounded-sm w-full max-w-3xl shadow-2xl relative"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <button 
-              onClick={() => setViewingModDetailsId(null)}
-              className="absolute top-4 right-4 text-hero-muted hover:text-hero-text transition-colors"
-            ><X size={16}/></button>
-            
-            {(() => {
-              const mod = mods.find(m => m.id === viewingModDetailsId);
-              if (!mod) return null;
-              
-              return (
-                <div className="space-y-5">
-                  <div>
-                    <h3 className="text-2xl font-black italic tracking-wider text-hero-accent mb-1 break-words leading-tight pr-6">{mod.name}</h3>
-                    <div className="flex gap-2 text-xs text-hero-text/60 font-mono">
-                      <span className="text-hero-text">v{mod.version || "1.0"}</span>
-                      <span>•</span>
-                      <span>By <span className="text-hero-text">{mod.author || "Unknown"}</span></span>
-                    </div>
-                  </div>
-                  
-                  {mod.url && (
-                    <div className="bg-black/40 border border-hero-border p-4 rounded-sm">
-                      <div className="flex items-center justify-between gap-4 mb-2">
-                        <div>
-                          <div className="text-hero-text/60 uppercase tracking-wider mb-1 font-bold text-[10px]">Source Website</div>
-                          <div className="text-hero-text font-bold text-lg flex items-center gap-2">
-                            <Globe size={16} className="text-hero-accent"/>
-                            {(() => {
-                              try {
-                                const urlObj = new URL(mod.url);
-                                const hostname = urlObj.hostname.toLowerCase();
-                                if (hostname.includes('discord')) return 'Discord';
-                                if (hostname.includes('gamebanana')) return 'GameBanana';
-                                if (hostname.includes('nexusmods')) return 'Nexus Mods';
-                                if (hostname.includes('drive.google')) return 'Google Drive';
-                                if (hostname.includes('mega.nz')) return 'MEGA';
-                                if (hostname.includes('github')) return 'GitHub';
-                                return urlObj.hostname.replace('www.', '');
-                              } catch (e) {
-                                return 'External Link';
-                              }
-                            })()}
-                          </div>
-                        </div>
-                        <a 
-                          href="#"
-                          onClick={(e) => { e.preventDefault(); if (mod.url) openUrl(mod.url); }}
-                          className="flex-shrink-0 bg-blue-500/20 text-blue-400 hover:bg-blue-500 hover:text-hero-text px-5 py-2.5 rounded-sm font-bold text-xs uppercase tracking-wider flex items-center gap-2 transition-colors"
-                        >
-                          <Globe size={14}/> Open Link
-                        </a>
-                      </div>
-                      <div className="text-[11px] text-hero-muted truncate bg-hero-bg/50 p-2 rounded border border-hero-border font-mono select-all hover:text-hero-textSecondary transition-colors">
-                        {mod.url}
-                      </div>
-                    </div>
-                  )}
-                  
-                  <div className="grid grid-cols-2 gap-4 text-xs">
-                    <div>
-                      <div className="text-hero-muted uppercase tracking-wider mb-1.5 font-bold">Category</div>
-                      <div className="text-hero-bg bg-hero-accent px-2.5 py-1 inline-block rounded-sm font-bold uppercase">{mod.category || "N/A"}</div>
-                    </div>
-                    <div>
-                      <div className="text-hero-text/60 uppercase tracking-wider mb-1.5 font-bold">Character</div>
-                      <div className="text-hero-text bg-white/10 px-2.5 py-1 inline-block rounded-sm">{mod.character || "N/A"}</div>
-                    </div>
-                    {mod.created_at && mod.created_at > 0 ? (
-                      <div className="col-span-2">
-                        <div className="text-hero-text/60 uppercase tracking-wider mb-1.5 font-bold">Date Imported</div>
-                        <div className="text-hero-text bg-black/40 border border-hero-border px-2.5 py-1 inline-block rounded-sm font-mono text-[11px]">
-                          {new Date(mod.created_at * 1000).toLocaleString(undefined, {
-                            year: 'numeric', month: 'short', day: 'numeric',
-                            hour: '2-digit', minute: '2-digit'
-                          })}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-
-                  {mod.pak_name && (
-                    <div>
-                      <div className="text-hero-text/60 uppercase tracking-wider mb-1.5 font-bold text-xs">File Name</div>
-                      <div className="text-hero-text font-mono text-[11px] break-all bg-black/40 p-2.5 rounded-sm border border-hero-border select-all">
-                        {mod.pak_name}
-                      </div>
-                    </div>
-                  )}
-                  
-                  {mod.modified_files && mod.modified_files.length > 0 && (
-                    <div>
-                      <div className="text-hero-text/60 uppercase tracking-wider mb-1.5 font-bold text-xs">Modified Internal Files ({mod.modified_files.length})</div>
-                      <div className="text-hero-text font-mono text-[11px] break-all bg-black/40 p-2.5 rounded-sm border border-hero-border max-h-48 overflow-y-auto custom-scrollbar">
-                        {mod.modified_files.slice(0, 50).map((f, i) => (
-                          <div key={i} className="truncate py-0.5" title={f}>{f}</div>
-                        ))}
-                        {mod.modified_files.length > 50 && (
-                          <div className="text-hero-accent mt-2 italic border-t border-hero-border pt-1.5">...and {mod.modified_files.length - 50} more files (hidden)</div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })()}
-          </div>
-        </div>
+        <ModDetailsModal
+          mod={mods.find(m => m.id === viewingModDetailsId)}
+          onClose={() => setViewingModDetailsId(null)}
+        />
       )}
 
       {/* AUTO FOLDER PREVIEW MODAL */}
@@ -2882,170 +2502,4 @@ function App() {
     </GlobalErrorBoundary>
   );
 }
-
-// Subcomponents
-function NavItem({ icon, label, active, onClick }: any) {
-  return (
-    <div 
-      onClick={onClick}
-      className={`flex items-center gap-3 px-3 py-2.5 rounded-sm cursor-pointer transition-all duration-200 font-bold text-sm
-      ${active ? 'bg-hero-accent/10 text-hero-accent border border-hero-accent/20' : 'text-hero-muted hover:bg-hero-surface hover:text-hero-text border border-transparent'}`}
-    >
-      <div className={active ? 'text-hero-accent' : 'text-hero-muted'}>{icon}</div>
-      {label}
-    </div>
-  );
-}
-
-function FilterItem({ label, count, active, onClick, hideCountOnHover, forceHideCount }: any) {
-  return (
-    <div 
-      onClick={onClick}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-sm cursor-pointer transition-all duration-200 mb-1
-      ${active ? 'bg-hero-accent/10 text-hero-accent border border-hero-accent/20' : 'text-hero-muted hover:bg-hero-surface hover:text-hero-text border border-transparent'}`}
-    >
-      <span className="text-xs font-bold truncate pr-2">{label}</span>
-      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-sm shrink-0 transition-opacity duration-200 ${active ? 'bg-hero-accent/20' : 'bg-hero-surface'} ${hideCountOnHover ? 'group-hover:opacity-0' : ''} ${forceHideCount ? 'opacity-0' : 'opacity-100'}`}>{count}</span>
-    </div>
-  );
-}
-
-function RenameFolderInput({ initialName, onChange }: { initialName: string, onChange: (val: string) => void }) {
-  const [name, setName] = useState(initialName);
-
-  return (
-    <input
-      type="text"
-      value={name}
-      onChange={e => setName(e.target.value)}
-      onBlur={() => onChange(name)}
-      onKeyDown={e => {
-        if (e.key === 'Enter') {
-          onChange(name);
-          e.currentTarget.blur();
-        }
-      }}
-      className="bg-hero-surface border border-hero-border focus:border-hero-accent text-hero-text px-2 py-1 rounded-sm outline-none w-2/3 font-bold text-sm transition-colors"
-    />
-  );
-}
-
-function DraggableWrapper({ id, data, children, isChild, isConflicting, isSelected, title, onClick, onContextMenu }: any) {
-  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({ id, data });
-  
-  return (
-    <div 
-      ref={setNodeRef}
-      title={title}
-      onClick={onClick}
-      onContextMenu={onContextMenu}
-      {...attributes}
-      {...listeners}
-      className={`flex items-center min-w-0 px-4 py-3 rounded-sm group cursor-pointer border transition-all duration-200 relative outline-none
-        ${isChild ? 'ml-8 w-[calc(100%-2rem)] border-l-2 border-l-hero-accent/50 ' : 'w-full '}
-        ${isDragging ? 'opacity-30 border-hero-accent/50 bg-hero-surface ' : 'cursor-grab '}
-        ${isConflicting ? 'bg-red-900/40 border-red-500 hover:bg-red-900/60' : 
-          isSelected ? 'bg-hero-accent/10 border-hero-accent/50' : 'bg-hero-card/40 border-hero-border hover:bg-hero-card/80 hover:border-hero-accent/30'}`}
-    >
-      {children}
-    </div>
-  );
-}
-
-function ModFolderRow({ 
-  folder, 
-  childrenMods, 
-  renderMod, 
-  mods, 
-  setMods, 
-  saveFolders, 
-  folders 
-}: any) {
-  const [isExpanded, setIsExpanded] = useState(false);
-  const allActive = childrenMods.length > 0 && childrenMods.every((m: any) => m.active);
-  const anyActive = childrenMods.some((m: any) => m.active);
-  const { setNodeRef, isOver } = useDroppable({ id: `folder-${folder.id}`, data: { type: 'folder', folderId: folder.id } });
-
-  return (
-    <div className="space-y-1.5" ref={setNodeRef}>
-      <div 
-        onClick={() => setIsExpanded(!isExpanded)}
-        className={`flex items-center w-full min-w-0 px-4 py-2.5 rounded-sm group cursor-pointer border transition-all duration-200 
-          ${isOver ? 'bg-hero-accent/20 border-hero-accent scale-[1.01] shadow-lg shadow-hero-accent/20 z-10' : 'bg-hero-surface/30 border-hero-border hover:bg-hero-surface/80 hover:border-hero-accent/30'}`}
-      >
-        <div 
-          className="w-12 shrink-0 text-hero-muted hover:text-hero-text transition-colors cursor-pointer"
-          onClick={(e) => { 
-            e.stopPropagation(); 
-            const nextState = !allActive;
-            const nextMods = mods.map((m: any) => folder.modIds.includes(m.id) ? { ...m, active: nextState } : m);
-            setMods(nextMods);
-          }}
-        >
-          {allActive ? <CheckSquare size={18} className="text-hero-accent" /> : 
-           anyActive ? <Square size={18} className="text-hero-accent/50" /> : <Square size={18} />}
-        </div>
-        <div className="w-10 shrink-0 text-hero-muted">
-          {isExpanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </div>
-        <div className="flex-1 font-black italic tracking-widest text-hero-accent text-[13px] uppercase flex items-center gap-2">
-          <Folder size={16} />
-          {folder.name}
-        </div>
-        <div className="shrink-0 text-[10px] font-bold text-hero-muted mr-4">
-          {childrenMods.length} MODS
-        </div>
-        <button 
-          onClick={(e) => {
-            e.stopPropagation();
-            saveFolders(folders.filter((f: any) => f.id !== folder.id));
-          }}
-          className="text-hero-muted hover:text-red-400 p-1 rounded transition-colors"
-          title="Unfolder"
-        >
-          <X size={14} />
-        </button>
-      </div>
-      
-      {isExpanded && (
-        <div className="space-y-1.5 mt-1.5">
-          {childrenMods.map((child: any) => renderMod(child, true))}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function ActiveDragOverlay({ mods, columns }: { mods: any[], columns: any[] }) {
-  const { active } = useDndContext();
-  if (!active || active.data.current?.type !== 'mod') return null;
-  const mod = mods.find(m => m.id === active.data.current?.modId);
-  if (!mod) return null;
-  
-  return (
-    <DragOverlay dropAnimation={null}>
-      <div className="bg-hero-card border-hero-accent ring-2 ring-hero-accent/50 shadow-2xl flex items-center px-4 py-3 rounded-sm opacity-90 w-[1000px] z-50">
-        <div className="w-12 shrink-0 text-hero-accent">
-          <CheckSquare size={18} />
-        </div>
-        <div className="w-10 shrink-0 text-hero-text/20">
-          <Eye size={16} />
-        </div>
-        {columns.map(col => {
-          if (col.id === "name") return <div key={col.id} className={`${col.width} min-w-0 font-bold text-hero-text truncate pr-4 text-[13px]`}>{mod.name}</div>;
-          if (col.id === "author") return <div key={col.id} className={`${col.width} shrink-0 text-xs font-medium text-hero-muted truncate pr-4`}>{mod.author}</div>;
-          if (col.id === "version") return <div key={col.id} className={`${col.width} shrink-0 text-[10px] font-bold text-hero-muted pr-4`}>{mod.version}</div>;
-          if (col.id === "category") return (
-            <div key={col.id} className={`${col.width} shrink-0 pr-4`}>
-              <span className="px-2 py-0.5 bg-hero-surface text-hero-muted text-[9px] font-bold uppercase tracking-wider rounded-sm border border-hero-border">{mod.category}</span>
-            </div>
-          );
-          if (col.id === "character") return <div key={col.id} className={`${col.width} shrink-0 text-xs font-medium text-hero-muted truncate pr-4`}>{mod.character}</div>;
-          return null;
-        })}
-      </div>
-    </DragOverlay>
-  );
-}
-
 export default App;
