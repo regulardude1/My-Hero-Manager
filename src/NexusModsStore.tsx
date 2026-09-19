@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback, memo, useRef } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { openUrl } from "@tauri-apps/plugin-opener";
-import { Download, ExternalLink, Search, RefreshCw, ChevronLeft, ChevronDown, LogIn, LogOut, Key, Filter, Check } from "lucide-react";
+import { Search, RefreshCw, ChevronLeft, ChevronDown, LogIn, LogOut, Key, Filter, Check } from "lucide-react";
+import { StoreModCard } from "./components/StoreModCard";
 
 // ── Types ─────────────────────────────────────────────────────────────
 interface NexusMod {
@@ -106,198 +108,6 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
   );
 }
 
-// ── Mod Card ──────────────────────────────────────────────────────────
-const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedUrls, localMods }: { mod: NexusMod; token: string; onDownloadedUrl: (url: string) => void; downloadedUrls: Set<string>; localMods?: any[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const [status, setStatus] = useState<{text: string; ok: boolean} | null>(null);
-  const [imgError, setImgError] = useState(false);
-  const [files, setFiles] = useState<NexusFile[]>([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
-
-  const fetchFiles = async () => {
-    if (files.length > 0) return;
-    setLoadingFiles(true);
-    try {
-      const res = await fetch(`https://api.nexusmods.com/v1/games/myheroultrarumble/mods/${mod.mod_id}/files.json`, {
-        headers: { apikey: token }
-      });
-      const data = await res.json();
-      if (data && data.files) {
-        const activeFiles = data.files.filter((f: NexusFile) => 
-          f.category_id === 1 || 
-          f.category_id === 2 || 
-          f.category_id === 3 || 
-          f.category_id === 5
-        );
-        setFiles(activeFiles);
-      }
-    } catch (e) {
-      console.error("Failed to fetch Nexus files", e);
-    } finally {
-      setLoadingFiles(false);
-    }
-  };
-
-  const handleExpand = () => {
-    if (!expanded) fetchFiles();
-    setExpanded(!expanded);
-  };
-
-  const thumbnail = mod.picture_url || null;
-
-  const checkIsDownloaded = (filename: string) => {
-    if (downloadedUrls.has(filename)) return true;
-    if (localMods) {
-      return localMods.some(m => m.pak_name === filename || m.pak_name === filename.replace(/\.zip$/, '.pak') || m.pak_name === filename.replace(/\.rar$/, '.pak') || m.pak_name === filename.replace(/\.7z$/, '.pak'));
-    }
-    return false;
-  };
-
-  const downloadingRef = useRef(downloading);
-  useEffect(() => { downloadingRef.current = downloading; }, [downloading]);
-  const onDownloadedUrlRef = useRef(onDownloadedUrl);
-  useEffect(() => { onDownloadedUrlRef.current = onDownloadedUrl; }, [onDownloadedUrl]);
-
-  // Listen for download completion events from the Rust webview popup
-  useEffect(() => {
-    let unlistenComplete: (() => void) | undefined;
-    let unlistenStatus: (() => void) | undefined;
-    import("@tauri-apps/api/event").then(({ listen }) => {
-      listen<{success: boolean; message: string; fileName: string}>("nexus-download-complete", async (event) => {
-        if (downloadingRef.current !== event.payload.fileName) return;
-
-        if (event.payload.message === "LOGIN_REQUIRED") {
-          setStatus({ text: "Login required for free users. Please log in and try downloading again.", ok: false });
-          setDownloading(null);
-          await invoke("open_nexus_login");
-          return;
-        }
-        
-        setStatus({ text: event.payload.message, ok: event.payload.success });
-        if (event.payload.success) {
-          onDownloadedUrlRef.current(event.payload.fileName);
-        }
-        setDownloading(null);
-      }).then(fn => { unlistenComplete = fn; });
-
-      listen<{message: string; fileName: string}>("nexus-download-status", (event) => {
-        if (downloadingRef.current === event.payload.fileName) {
-          setStatus({ text: event.payload.message, ok: true });
-        }
-      }).then(fn => { unlistenStatus = fn; });
-    });
-    return () => { 
-      if (unlistenComplete) unlistenComplete(); 
-      if (unlistenStatus) unlistenStatus();
-    };
-  }, []);
-
-  const handleDownload = async (file: NexusFile) => {
-    setDownloading(file.file_name);
-    setStatus(null);
-    try {
-      // Try the API download directly first (works for Premium users)
-      const linkRes = await fetch(`https://api.nexusmods.com/v1/games/myheroultrarumble/mods/${mod.mod_id}/files/${file.id[0]}/download_link.json`, {
-        headers: { apikey: token }
-      });
-      const links = await linkRes.json();
-
-      if (Array.isArray(links) && links.length > 0 && links[0].URI) {
-        // Premium user — direct download via Rust backend
-        const result = await invoke<string>("download_url_mod", {
-          url: links[0].URI, fileName: file.file_name, modTitle: mod.name, modAuthor: mod.author || "Unknown"
-        });
-        setStatus({ text: result, ok: true });
-        onDownloadedUrl(file.file_name);
-        setDownloading(null);
-        return;
-      }
-
-      // Free user — open a hidden webview to the Nexus files page to fetch the download
-      // The Rust backend intercepts the download and installs the mod automatically
-      setStatus({ text: "Fetching download directly...", ok: true });
-      await invoke("open_nexus_download", {
-        modId: mod.mod_id,
-        fileId: file.id[0],
-        fileName: file.file_name,
-        modTitle: mod.name,
-        modAuthor: mod.author || "Unknown"
-      });
-      // Status will update when the nexus-download-complete event fires
-    } catch (e: any) {
-      setStatus({ text: String(e), ok: false });
-      setDownloading(null);
-    }
-  };
-
-  return (
-    <div className="bg-hero-card border border-hero-border rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-1 hover:border-[#DA8F44]/40 transition-all duration-300 flex flex-col">
-      {/* Thumbnail */}
-      <div className="relative w-full aspect-video bg-black/40 group">
-        {thumbnail && !imgError ? (
-          <img src={thumbnail} alt={mod.name} loading="lazy" className="w-full h-full object-cover" onError={() => setImgError(true)}/>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-hero-text/20 text-4xl">📦</div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4 flex flex-col flex-1 gap-2">
-        <h3 className="font-bold text-hero-text text-sm leading-tight line-clamp-2">{mod.name}</h3>
-        <p className="text-xs text-hero-muted">by <span className="text-hero-text/60">{mod.author}</span></p>
-
-        <button
-          onClick={handleExpand}
-          className="mt-auto w-full flex items-center justify-center gap-2 bg-[#DA8F44] hover:bg-[#b87838] text-hero-text text-xs font-black py-2 rounded-lg transition-all"
-        >
-          {expanded ? "Hide Downloads" : "View Downloads"}
-        </button>
-
-        {expanded && (
-          <div className="mt-2 space-y-1.5">
-            {loadingFiles && <p className="text-xs text-hero-muted text-center py-2">Loading files...</p>}
-            {!loadingFiles && files.length === 0 && (
-              <p className="text-xs text-hero-muted text-center py-2">No files available</p>
-            )}
-            {files.map((file, i) => {
-              const isLoading = downloading === file.file_name;
-              const isDownloaded = checkIsDownloaded(file.file_name);
-              return (
-                <button
-                  key={i}
-                  disabled={isLoading}
-                  onClick={() => handleDownload(file)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
-                    ${isDownloaded 
-                        ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border border-blue-600/50" 
-                        : "bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/20"}`}
-                >
-                  <Download size={12}/>
-                  <span className="truncate flex-1 text-left">{isLoading ? "Installing..." : file.file_name}</span>
-                  {isDownloaded && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300">Installed</span>}
-                </button>
-              );
-            })}
-            <button 
-              onClick={() => openUrl(`https://www.nexusmods.com/myheroultrarumble/mods/${mod.mod_id}`)}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border transition-all mt-2"
-            >
-              <ExternalLink size={12} /> View on Nexus Mods
-            </button>
-            {status && (
-              <div className={`text-xs p-2 rounded-lg mt-2 ${status.ok ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"}`}>
-                {status.ok ? "✅ " : "❌ "}{status.text}
-              </div>
-            )}
-
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
-
 // ── Main NexusMods Store Panel ──────────────────────────────────────────
 export default function NexusModsStore({ allow18Plus = true, localMods = [], onModInstalled }: { allow18Plus?: boolean; localMods?: any[], onModInstalled?: () => void }) {
   const [mods, setMods] = useState<NexusMod[]>([]);
@@ -311,6 +121,9 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
     return localStorage.getItem("nexus_api_key");
   });
   const [showLogin, setShowLogin] = useState(false);
+  const [nexusLoginStep, setNexusLoginStep] = useState(1); // 1 = sign in first, 2 = API key unlocked
+  const [flashMsg, setFlashMsg] = useState<string | null>(null);
+  const [flashErr, setFlashErr] = useState(false);
 
   const [cardSize, setCardSize] = useState(() => {
     try {
@@ -465,7 +278,44 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
     setToken(null);
     localStorage.removeItem("nexus_api_key");
     setMods([]);
+    // Also sign out of the Nexus account session (if one is active)
+    invoke("nexus_signout").catch(() => {});
+    setNexusLoginStep(1);
   };
+
+  // When the login window detects a successful sign-in, jump straight to the API key step
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+    listen("nexus-signed-in", () => {
+      setNexusLoginStep(2);
+      if (!localStorage.getItem("nexus_api_key")) {
+        setFlashErr(false);
+        setFlashMsg("Logged In Successfully!");
+        setTimeout(() => {
+          setFlashMsg(null);
+          setShowLogin(true);
+        }, 1600);
+      }
+    }).then(fn => { unlisten = fn; }).catch(() => {});
+    return () => { if (unlisten) unlisten(); };
+  }, []);
+
+  // Sign-out feedback (from the hidden sign-out webview)
+  useEffect(() => {
+    let unOk: (() => void) | null = null;
+    let unFail: (() => void) | null = null;
+    listen("nexus-signed-out", () => {
+      setFlashErr(false);
+      setFlashMsg("Signed Out of Nexus");
+      setTimeout(() => setFlashMsg(null), 2000);
+    }).then(fn => { unOk = fn; }).catch(() => {});
+    listen("nexus-signout-failed", () => {
+      setFlashErr(true);
+      setFlashMsg("Nexus Sign-Out Failed");
+      setTimeout(() => setFlashMsg(null), 2000);
+    }).then(fn => { unFail = fn; }).catch(() => {});
+    return () => { if (unOk) unOk(); if (unFail) unFail(); };
+  }, []);
 
   const [backendChars, setBackendChars] = useState<string[]>([]);
   useEffect(() => {
@@ -516,8 +366,18 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
   });
 
   return (
-    <div className="flex flex-col h-full bg-hero-bg overflow-hidden">
+    <div className="flex flex-col h-full bg-hero-bg overflow-hidden relative">
       {showLogin && <LoginModal onLogin={handleLogin} onCancel={() => setShowLogin(false)} />}
+
+      {/* Success flash (after Nexus sign-in) */}
+      {flashMsg && (
+        <div className="absolute inset-x-0 top-16 z-[110] flex justify-center pointer-events-none">
+          <div className={`flex items-center gap-2 bg-hero-sidebar border font-bold text-sm px-5 py-3 rounded-xl shadow-2xl ${flashErr ? "border-red-500/40 text-red-300" : "border-green-500/40 text-green-300"}`}>
+            <Check size={16} className={flashErr ? "text-red-400" : "text-green-400"} />
+            {flashMsg}
+          </div>
+        </div>
+      )}
       
       {/* Top Navigation / Status Bar */}
       <div className="shrink-0 flex items-center justify-between p-4 bg-hero-sidebar border-b border-hero-border relative z-20 shadow-md">
@@ -525,8 +385,16 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
         {/* Breadcrumb / Nav */}
         <div className="flex items-center gap-4 relative">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-full bg-[#DA8F44] text-hero-text flex items-center justify-center font-black text-lg border border-hero-border shrink-0">
-              N
+            <div className="relative shrink-0">
+              <div className="w-8 h-8 rounded-full bg-[#DA8F44] text-hero-text flex items-center justify-center font-black text-lg border border-hero-border">
+                N
+              </div>
+              {token && (
+                <span
+                  title="API key active"
+                  className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-400 border-2 border-hero-sidebar shadow-[0_0_6px_rgba(74,222,128,0.8)]"
+                />
+              )}
             </div>
             <div className="flex flex-col">
               <h2 className="text-[10px] font-black italic tracking-widest text-hero-muted flex items-center gap-2 uppercase">
@@ -647,7 +515,7 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
                 <LogIn size={14}/>
                 <span className="hidden md:inline">Nexus Login</span>
               </button>
-              <button onClick={handleLogout} title="Logout API Key" className="p-1.5 text-hero-text/30 hover:text-red-400 transition-colors">
+              <button onClick={handleLogout} title="Log Out" className="p-1.5 text-hero-text/30 hover:text-red-400 transition-colors">
                 <LogOut size={14}/>
               </button>
             </div>
@@ -663,7 +531,7 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
         </div>
       </div>
 
-      {/* Not logged in state */}
+      {/* Not logged in — guided two-step setup */}
       {!token && (
         <div className="flex-1 flex flex-col items-center justify-center gap-6 text-center p-8">
           <div className="w-24 h-24 rounded-full bg-[#DA8F44]/20 flex items-center justify-center text-[#DA8F44]">
@@ -671,15 +539,43 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
           </div>
           <div>
             <h3 className="text-2xl font-black text-hero-text mb-2">Nexus Mods Integration</h3>
-            <p className="text-hero-muted text-sm max-w-sm">Log in with your Personal API Key to browse and download from Nexus Mods.</p>
+            <p className="text-hero-muted text-sm max-w-md">Two quick steps to browse and download mods:</p>
           </div>
-          <button
-            onClick={() => setShowLogin(true)}
-            className="flex items-center gap-2 px-6 py-3 bg-[#DA8F44] hover:bg-[#b87838] text-hero-text font-bold rounded-xl transition-all shadow-[0_0_20px_rgba(218,143,68,0.3)] hover:shadow-[0_0_30px_rgba(218,143,68,0.5)]"
-          >
-            <LogIn size={18}/>
-            Enter API Key
-          </button>
+          <div className="w-full max-w-md flex flex-col gap-3">
+            {/* Step 1 — Sign in */}
+            <div className="flex items-center gap-3 bg-hero-surface border border-hero-border rounded-xl p-4 text-left">
+              <span className="w-7 h-7 rounded-full bg-[#DA8F44] text-black font-black text-xs flex items-center justify-center shrink-0">1</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-hero-text">Sign in to your Nexus account</p>
+                <p className="text-[11px] text-hero-muted">Needed for free (slow) downloads</p>
+              </div>
+              <button
+                onClick={() => {
+                  invoke("open_nexus_login");
+                  setNexusLoginStep(2);
+                }}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-[#DA8F44] hover:bg-[#b87838] text-hero-text rounded-lg transition-all shrink-0"
+              >
+                <LogIn size={13}/>
+                Sign In
+              </button>
+            </div>
+            {/* Step 2 — API key (unlocked after step 1) */}
+            <div className={`flex items-center gap-3 bg-hero-surface border border-hero-border rounded-xl p-4 text-left transition-all ${nexusLoginStep < 2 ? "opacity-40 pointer-events-none" : ""}`}>
+              <span className="w-7 h-7 rounded-full bg-[#DA8F44] text-black font-black text-xs flex items-center justify-center shrink-0">2</span>
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-bold text-hero-text">Enter your Personal API Key</p>
+                <p className="text-[11px] text-hero-muted">Found at nexusmods.com/settings/api-keys</p>
+              </div>
+              <button
+                onClick={() => setShowLogin(true)}
+                className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold bg-[#DA8F44] hover:bg-[#b87838] text-hero-text rounded-lg transition-all shrink-0"
+              >
+                <Key size={13}/>
+                Enter Key
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
@@ -693,9 +589,38 @@ export default function NexusModsStore({ allow18Plus = true, localMods = [], onM
             style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize}px, 1fr))` }}
           >
             {filteredMods.map(mod => (
-              <ModCard 
-                key={mod.mod_id} 
-                mod={mod}
+              <StoreModCard
+                key={mod.mod_id}
+                source="nexus"
+                mod={{
+                  title: mod.name,
+                  author: mod.author,
+                  thumbnail: mod.picture_url || null,
+                  tags: [],
+                  typeTags: [],
+                  links: [],
+                  nexusModId: mod.mod_id,
+                  fetchMore: async () => {
+                    const res = await fetch(`https://api.nexusmods.com/v1/games/myheroultrarumble/mods/${mod.mod_id}/files.json`, {
+                      headers: { apikey: token }
+                    });
+                    const data = await res.json();
+                    if (data && data.files) {
+                      const activeFiles = data.files.filter((f: NexusFile) =>
+                        f.category_id === 1 || f.category_id === 2 || f.category_id === 3 || f.category_id === 5
+                      );
+                      return activeFiles.map((f: NexusFile) => ({
+                        url: f.file_name,
+                        label: f.file_name,
+                        direct: true,
+                        origin: "file",
+                        nexusFileId: f.id[0],
+                      }));
+                    }
+                    return [];
+                  },
+                  external: { label: "View on Nexus Mods", onClick: () => openUrl(`https://www.nexusmods.com/myheroultrarumble/mods/${mod.mod_id}`) },
+                }}
                 token={token}
                 onDownloadedUrl={handleDownloadedUrl}
                 downloadedUrls={downloadedUrls}

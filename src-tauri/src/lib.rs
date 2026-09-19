@@ -123,6 +123,7 @@ pub fn run() {
             discord::download_discord_mod,
             nexus::open_nexus_download,
             nexus::open_nexus_login,
+            nexus::nexus_signout,
             install::download_url_mod,
             discord::open_discord_login,
             install::install_local_mods,
