@@ -1,6 +1,6 @@
-import { useState, useEffect, useCallback, memo } from "react";
-import { invoke } from "@tauri-apps/api/core";
-import { Download, ExternalLink, Search, RefreshCw, Filter, Check, ChevronDown } from "lucide-react";
+import { useState, useEffect, useCallback } from "react";
+import { Search, RefreshCw, Filter, Check, ChevronDown } from "lucide-react";
+import { StoreModCard } from "./components/StoreModCard";
 
 // ── Types ─────────────────────────────────────────────────────────────
 interface GameBananaMod {
@@ -25,143 +25,6 @@ interface GameBananaFile {
   _nFilesize: number;
   _sDownloadUrl: string;
 }
-
-// ── Mod Card ──────────────────────────────────────────────────────────
-const ModCard = memo(function ModCard({ mod, onDownloadedUrl, downloadedUrls, localMods }: { mod: GameBananaMod; onDownloadedUrl: (url: string) => void; downloadedUrls: Set<string>; localMods?: any[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const [status, setStatus] = useState<{text: string; ok: boolean} | null>(null);
-  const [imgError, setImgError] = useState(false);
-  const [files, setFiles] = useState<GameBananaFile[]>([]);
-  const [loadingFiles, setLoadingFiles] = useState(false);
-
-  const fetchFiles = async () => {
-    if (files.length > 0) return;
-    setLoadingFiles(true);
-    try {
-      const res = await fetch(`https://api.gamebanana.com/Core/Item/Data?itemtype=Mod&itemid=${mod._idRow}&fields=name,Files().aFiles()`);
-      const data = await res.json();
-      if (data && data[1]) {
-        setFiles(Object.values(data[1]) as GameBananaFile[]);
-      }
-    } catch (e) {
-      console.error("Failed to fetch GameBanana files", e);
-    } finally {
-      setLoadingFiles(false);
-    }
-  };
-
-  const handleExpand = () => {
-    if (!expanded) fetchFiles();
-    setExpanded(!expanded);
-  };
-
-  const thumbnail = mod._aPreviewMedia?._aImages?.[0] ? `${mod._aPreviewMedia._aImages[0]._sBaseUrl}/${mod._aPreviewMedia._aImages[0]._sFile}` : null;
-
-  const checkIsDownloaded = (url: string) => {
-    if (downloadedUrls.has(url)) return true;
-    if (localMods && localMods.some(m => m.url === url)) return true;
-    try {
-      const filename = decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
-      if (filename && localMods?.some(m => m.pak_name && (m.pak_name === filename || m.pak_name.replace(/_$/, '') === filename))) return true;
-    } catch {}
-    return false;
-  };
-
-  const handleDownload = async (url: string, filename: string) => {
-    setDownloading(url);
-    setStatus(null);
-    try {
-      const result = await invoke<string>("download_url_mod", {
-        url, fileName: filename, modTitle: mod._sName, modAuthor: mod._aSubmitter._sName
-      });
-      setStatus({ text: result, ok: true });
-      onDownloadedUrl(url);
-    } catch (e: any) {
-      setStatus({ text: String(e), ok: false });
-    } finally {
-      setDownloading(null);
-    }
-  };
-
-  return (
-    <div className="bg-hero-card border border-hero-border rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-1 hover:border-yellow-500/40 transition-all duration-300 flex flex-col">
-      {/* Thumbnail */}
-      <div className="relative w-full aspect-video bg-black/40">
-        {thumbnail && !imgError ? (
-          <img src={thumbnail} alt={mod._sName} loading="lazy" className="w-full h-full object-cover" onError={() => setImgError(true)}/>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-hero-text/20 text-4xl">🍌</div>
-        )}
-      </div>
-
-      {/* Content */}
-      <div className="p-4 flex flex-col flex-1 gap-2">
-        <h3 className="font-bold text-hero-text text-sm leading-tight line-clamp-2">{mod._sName}</h3>
-        <p className="text-xs text-hero-muted">by <span className="text-hero-text/60">{mod._aSubmitter._sName}</span></p>
-
-        {mod._aTags && mod._aTags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {mod._aTags.slice(0, 3).map(t => (
-              <span key={t} className="px-2 py-0.5 bg-hero-surface text-yellow-300 text-[10px] rounded-full border border-hero-border">{t}</span>
-            ))}
-          </div>
-        )}
-
-        <button
-          onClick={handleExpand}
-          className="mt-auto w-full flex items-center justify-center gap-2 bg-yellow-500 hover:bg-yellow-400 text-black text-xs font-black py-2 rounded-lg transition-all"
-        >
-          {expanded ? "Hide Downloads" : "View Downloads"}
-        </button>
-
-        {expanded && (
-          <div className="mt-2 space-y-1.5">
-            {loadingFiles && <p className="text-xs text-hero-muted text-center py-2">Loading files...</p>}
-            {!loadingFiles && files.length === 0 && (
-              <p className="text-xs text-hero-muted text-center py-2">No files available</p>
-            )}
-            {files.map((file, i) => {
-              const url = file._sDownloadUrl;
-              const direct = true;
-              const label = file._sFile;
-              const isLoading = downloading === url;
-              const isDownloaded = checkIsDownloaded(url);
-              return (
-                <button
-                  key={i}
-                  disabled={isLoading}
-                  onClick={() => direct ? handleDownload(url, label) : window.open(url, "_blank")}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
-                    ${direct 
-                        ? (isDownloaded 
-                            ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border border-blue-600/50" 
-                            : "bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/20")
-                        : "bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border"}`}
-                >
-                  {direct ? <Download size={12}/> : <ExternalLink size={12}/>}
-                  <span className="truncate flex-1 text-left">{isLoading ? "Installing..." : (direct ? `⬇ ${label}` : label)}</span>
-                  {isDownloaded && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300">Installed</span>}
-                </button>
-              );
-            })}
-            <button 
-              onClick={() => window.open(mod._sProfileUrl, "_blank")}
-              className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-xs font-medium bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border transition-all mt-2"
-            >
-              <ExternalLink size={12} /> View on GameBanana
-            </button>
-            {status && (
-              <div className={`text-xs p-2 rounded-lg mt-2 ${status.ok ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"}`}>
-                {status.ok ? "✅ " : "❌ "}{status.text}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
 
 // ── Main GameBanana Store Panel ──────────────────────────────────────────
 export default function GameBananaStore({ allow18Plus = true, localMods = [], onModInstalled }: { allow18Plus?: boolean; localMods?: any[], onModInstalled?: () => void }) {
@@ -420,9 +283,32 @@ export default function GameBananaStore({ allow18Plus = true, localMods = [], on
           style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize}px, 1fr))` }}
         >
           {filteredMods.map(mod => (
-            <ModCard 
-              key={mod._idRow} 
-              mod={mod} 
+            <StoreModCard
+              key={mod._idRow}
+              source="gamebanana"
+              mod={{
+                title: mod._sName,
+                author: mod._aSubmitter._sName,
+                thumbnail: mod._aPreviewMedia?._aImages?.[0] ? `${mod._aPreviewMedia._aImages[0]._sBaseUrl}/${mod._aPreviewMedia._aImages[0]._sFile}` : null,
+                tags: (mod._aTags ?? []).slice(0, 3),
+                typeTags: [],
+                links: [],
+                fetchMore: async () => {
+                  const res = await fetch(`https://api.gamebanana.com/Core/Item/Data?itemtype=Mod&itemid=${mod._idRow}&fields=name,Files().aFiles()`);
+                  const data = await res.json();
+                  if (data && data[1]) {
+                    return (Object.values(data[1]) as GameBananaFile[]).map(f => ({
+                      url: f._sDownloadUrl,
+                      label: f._sFile,
+                      direct: true,
+                      origin: "file",
+                    }));
+                  }
+                  return [];
+                },
+                external: { label: "View on GameBanana", onClick: () => window.open(mod._sProfileUrl, "_blank") },
+              }}
+              token=""
               onDownloadedUrl={handleDownloadedUrl}
               downloadedUrls={downloadedUrls}
               localMods={localMods}

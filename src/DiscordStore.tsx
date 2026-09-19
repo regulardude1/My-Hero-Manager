@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useRef, memo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { X, LogIn, Download, ExternalLink, Search, RefreshCw, LogOut, ChevronDown, Check, Filter, Info, Gamepad2 } from "lucide-react";
+import { X, LogIn, Search, RefreshCw, LogOut, ChevronDown, Check, Filter } from "lucide-react";
+import { StoreModCard } from "./components/StoreModCard";
 
 // ── Types ────────────────────────────────────────────────────────────────────────────────
 interface RawThread {
@@ -286,243 +287,6 @@ function LoginModal({ onLogin, onCancel }: { onLogin: (token: string) => void; o
     </div>
   );
 }
-
-// ── Mod Card ─────────────────────────────────────────────────────────────────────────────
-const ModCard = memo(function ModCard({ mod, token, onDownloadedUrl, downloadedUrls, localMods }: { mod: DiscordMod; token: string; onDownloadedUrl: (url: string) => void; downloadedUrls: Set<string>; localMods: any[] }) {
-  const [expanded, setExpanded] = useState(false);
-  const [downloading, setDownloading] = useState<string | null>(null);
-  const [status, setStatus] = useState<{text: string; ok: boolean} | null>(null);
-  const [imgError, setImgError] = useState(false);
-  const [gbFiles, setGbFiles] = useState<{url: string, label: string}[]>([]);
-  const [loadingGb, setLoadingGb] = useState(false);
-
-  useEffect(() => {
-    setImgError(false);
-  }, [mod.thumbnail]);
-
-  useEffect(() => {
-    if (!expanded) return;
-    const gbLinks = mod.links.filter(l => (typeof l === 'string' ? l : l.url).includes("gamebanana.com/mods/"));
-    if (gbLinks.length === 0 || gbFiles.length > 0) return;
-
-    let isMounted = true;
-    const fetchGb = async () => {
-      setLoadingGb(true);
-      const fetched: {url: string, label: string}[] = [];
-      try {
-        for (const linkObj of gbLinks) {
-          const urlStr = typeof linkObj === 'string' ? linkObj : linkObj.url;
-          const m = urlStr.match(/gamebanana\.com\/mods\/(\d+)/i);
-          if (!m) continue;
-          const id = m[1];
-          const res = await fetch(`https://api.gamebanana.com/Core/Item/Data?itemtype=Mod&itemid=${id}&fields=name,Files().aFiles()`);
-          const data = await res.json();
-          if (data && data[1]) {
-            const files = Object.values(data[1]) as any[];
-            for (const f of files) {
-              fetched.push({ url: f._sDownloadUrl, label: f._sFile });
-            }
-          }
-        }
-        if (isMounted) setGbFiles(fetched);
-      } catch (e) {
-        console.error("GameBanana fetch error", e);
-      } finally {
-        if (isMounted) setLoadingGb(false);
-      }
-    };
-    fetchGb();
-    return () => { isMounted = false; };
-  }, [expanded, mod.links, gbFiles.length]);
-
-  const typeTags = mod.tags.filter(t => TYPE_TAGS.has(t.toLowerCase()));
-  const charTags = mod.tags.filter(t => !TYPE_TAGS.has(t.toLowerCase()));
-  
-  const getBaseUrl = (u: string) => {
-    try {
-      const parsed = new URL(u);
-      return parsed.origin + parsed.pathname;
-    } catch { return u; }
-  };
-
-  const checkIsDownloaded = (url: string) => {
-    const baseUrl = getBaseUrl(url);
-    if (Array.from(downloadedUrls).some(u => getBaseUrl(u) === baseUrl)) return true;
-    
-    if (localMods) {
-      if (localMods.some(m => m.url && getBaseUrl(m.url) === baseUrl)) return true;
-      try {
-        const filename = decodeURIComponent(new URL(url).pathname.split('/').pop() || '');
-        if (filename) {
-          const matches = localMods.some(m => {
-            if (!m.pak_name) return false;
-            const matchName = m.pak_name === filename || m.pak_name.replace(/_$/, '') === filename;
-            if (!matchName) return false;
-            if (m.url && (m.url.includes("discordapp.com") || m.url.includes("discordapp.net"))) {
-              return getBaseUrl(m.url) === baseUrl;
-            }
-            return true;
-          });
-          if (matches) return true;
-        }
-      } catch {}
-    }
-    return false;
-  };
-  
-  const isModDownloaded = mod.links.some(linkObj => {
-    const url = typeof linkObj === 'string' ? linkObj : linkObj.url;
-    return checkIsDownloaded(url);
-  });
-
-  const handleDownload = async (url: string, explicitFileName?: string) => {
-    setDownloading(url);
-    setStatus(null);
-    try {
-      let result;
-      if (explicitFileName) {
-        result = await invoke<string>("download_url_mod", {
-          url, fileName: explicitFileName, modTitle: mod.title, modAuthor: mod.author
-        });
-      } else {
-        result = await invoke<string>("download_discord_mod", {
-          token, url, modTitle: mod.title, modAuthor: mod.author
-        });
-      }
-      setStatus({ text: result, ok: true });
-      onDownloadedUrl(url);
-    } catch (e: any) {
-      setStatus({ text: String(e), ok: false });
-    } finally {
-      setDownloading(null);
-    }
-  };
-
-  return (
-    <div 
-      className="bg-hero-card border border-hero-border rounded-xl overflow-hidden shadow-xl hover:shadow-2xl hover:-translate-y-1 hover:border-[#5865F2]/40 transition-all duration-300 flex flex-col"
-    >
-      <div className="relative w-full aspect-video bg-black/40">
-        {mod.thumbnail && !imgError ? (
-          <img src={mod.thumbnail} alt={mod.title} loading="lazy" className="w-full h-full object-cover" onError={() => setImgError(true)}/>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center text-hero-text/20 text-4xl">
-            <Gamepad2 className="w-12 h-12 opacity-50"/>
-          </div>
-        )}
-        {typeTags.length > 0 && (
-          <div className="absolute top-2 left-2 flex gap-1">
-            {typeTags.map(t => (
-              <span key={t} className="px-2 py-0.5 bg-[#5865F2]/80 text-hero-text text-[10px] font-bold rounded-full backdrop-blur-sm">{t}</span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      <div className="p-4 flex flex-col flex-1 gap-2">
-        <h3 className="font-bold text-hero-text text-sm leading-tight line-clamp-2">{mod.title}</h3>
-        <p className="text-xs text-hero-muted">by <span className="text-hero-text/60">{mod.author}</span></p>
-
-        {charTags.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {charTags.map(t => (
-              <span key={t} className="px-2 py-0.5 bg-hero-surface text-[#a0c4ff] text-[10px] rounded-full border border-hero-border">👤 {t}</span>
-            ))}
-          </div>
-        )}
-
-        {isModDownloaded ? (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="mt-auto w-full flex items-center justify-center gap-2 bg-green-500 hover:bg-green-600 text-hero-text text-xs font-bold py-2 rounded-lg transition-all"
-          >
-            ✅ Downloaded
-          </button>
-        ) : (
-          <button
-            onClick={() => setExpanded(!expanded)}
-            className="mt-auto w-full flex items-center justify-center gap-2 bg-[#5865F2] hover:bg-[#4752C4] text-hero-text text-xs font-bold py-2 rounded-lg transition-all"
-          >
-            <Download size={12}/>
-            {mod.links.length > 0 ? `${mod.links.length} Download${mod.links.length > 1 ? "s" : ""}` : "View Thread"}
-          </button>
-        )}
-
-        {expanded && (
-          <div className="mt-2 space-y-1.5">
-            {mod.links.length === 0 && (
-              <p className="text-xs text-hero-muted text-center py-2">No direct download links found</p>
-            )}
-            {mod.links.map((linkObj, i) => {
-              const url = typeof linkObj === 'string' ? linkObj : linkObj.url;
-              const dateStr = typeof linkObj === 'object' && linkObj.date ? new Date(linkObj.date).toLocaleString() : "";
-              if (url.includes("gamebanana.com/mods/")) return null;
-              const direct = isDirect(url);
-              const label = linkLabel(url);
-              const isLoading = downloading === url;
-              const isDownloaded = checkIsDownloaded(url);
-              return (
-                <button
-                  key={i}
-                  disabled={isLoading}
-                  title={dateStr ? `Posted: ${dateStr}` : undefined}
-                  onClick={() => direct ? handleDownload(url) : window.open(url, "_blank")}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
-                    ${direct 
-                        ? (isDownloaded 
-                            ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border border-blue-600/50" 
-                            : "bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/20")
-                        : "bg-hero-surface hover:bg-hero-surfaceHover text-hero-textSecondary border border-hero-border"}`}
-                >
-                  {direct ? <Download size={12}/> : <ExternalLink size={12}/>}
-                  <span className="truncate flex-1 text-left pr-2">
-                    {isLoading ? "Installing..." : label} 
-                  </span>
-                  {(true) && (
-                    <div title={dateStr ? `Posted: ${dateStr}` : `No Date Found`} className="flex items-center text-blue-300 hover:text-hero-text transition-colors">
-                      <Info size={14} />
-                    </div>
-                  )}
-                  {isDownloaded && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300 ml-2">Installed</span>}
-                </button>
-              );
-            })}
-            
-            {loadingGb && <p className="text-xs text-hero-muted text-center py-2">Loading GameBanana files...</p>}
-            
-            {gbFiles.map((f, i) => {
-              const url = f.url;
-              const label = f.label;
-              const isLoading = downloading === url;
-              const isDownloaded = checkIsDownloaded(url);
-              return (
-                <button
-                  key={"gb"+i}
-                  disabled={isLoading}
-                  onClick={() => handleDownload(url, label)}
-                  className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-medium transition-all
-                    ${isDownloaded 
-                        ? "bg-blue-800 hover:bg-blue-700 text-blue-100 border border-blue-600/50" 
-                        : "bg-green-600/20 hover:bg-green-600/30 text-green-300 border border-green-500/20"}`}
-                >
-                  <Download size={12}/>
-                  <span className="truncate flex-1 text-left">{isLoading ? "Installing..." : `🍌 ⬇ ${label}`}</span>
-                  {isDownloaded && <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300">Installed</span>}
-                </button>
-              );
-            })}
-            {status && (
-              <div className={`text-xs p-2 rounded-lg ${status.ok ? "text-green-400 bg-green-500/10" : "text-red-400 bg-red-500/10"}`}>
-                {status.ok ? "✅ " : "❌ "}{status.text}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    </div>
-  );
-});
-
 
 // ── Cache Helpers ────────────────────────────────────────────────────────────────────────
 function isDiscordUrlExpired(url?: string): boolean {
@@ -1296,13 +1060,47 @@ export default function DiscordStore({ localMods = [], allow18Plus = true, onMod
 
           <div className="grid gap-4" style={{ gridTemplateColumns: `repeat(auto-fill, minmax(${cardSize}px, 1fr))` }}>
             {mods.map(mod => (
-              <ModCard
-                localMods={localMods}
+              <StoreModCard
                 key={mod.id}
-                mod={mod}
+                source="discord"
+                mod={{
+                  title: mod.title,
+                  author: mod.author,
+                  thumbnail: mod.thumbnail,
+                  tags: mod.tags.filter(t => !TYPE_TAGS.has(t.toLowerCase())),
+                  typeTags: mod.tags.filter(t => TYPE_TAGS.has(t.toLowerCase())),
+                  links: mod.links.map(linkObj => {
+                    const url = typeof linkObj === 'string' ? linkObj : linkObj.url;
+                    return {
+                      url,
+                      label: linkLabel(url),
+                      direct: isDirect(url),
+                      date: typeof linkObj === 'object' && linkObj.date ? linkObj.date : undefined,
+                      origin: "link",
+                    };
+                  }),
+                  fetchMore: async () => {
+                    const gbLinks = mod.links.filter(l => (typeof l === 'string' ? l : l.url).includes("gamebanana.com/mods/"));
+                    const fetched: { url: string; label: string; direct: boolean; origin: "file" }[] = [];
+                    for (const linkObj of gbLinks) {
+                      const urlStr = typeof linkObj === 'string' ? linkObj : linkObj.url;
+                      const m = urlStr.match(/gamebanana\.com\/mods\/(\d+)/i);
+                      if (!m) continue;
+                      const res = await fetch(`https://api.gamebanana.com/Core/Item/Data?itemtype=Mod&itemid=${m[1]}&fields=name,Files().aFiles()`);
+                      const data = await res.json();
+                      if (data && data[1]) {
+                        for (const f of Object.values(data[1]) as any[]) {
+                          fetched.push({ url: f._sDownloadUrl, label: f._sFile, direct: true, origin: "file" });
+                        }
+                      }
+                    }
+                    return fetched;
+                  },
+                }}
                 token={token}
                 onDownloadedUrl={handleDownloadedUrl}
                 downloadedUrls={downloadedUrls}
+                localMods={localMods}
               />
             ))}
           </div>
