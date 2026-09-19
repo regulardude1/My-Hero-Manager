@@ -18,6 +18,7 @@ import { NavItem, FilterItem, RenameFolderInput } from "./components/ui";
 import { ModDetailsModal } from "./components/ModDetailsModal";
 import { useCollections } from "./hooks/useCollections";
 import ModTable, { INITIAL_COLUMNS } from "./components/ModTable";
+import { setViewerVisible } from "./emote";
 
 class GlobalErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean, error: string, stack: string }> {
   constructor(props: { children: ReactNode }) {
@@ -288,6 +289,12 @@ function App() {
 
   useEffect(() => {
     setSearchQuery("");
+  }, [activeTab]);
+
+  // The Local Library (and its emote viewer) stays mounted when hidden, so
+  // pause emote animation + audio whenever we're on a different tab.
+  useEffect(() => {
+    setViewerVisible(activeTab === "Local");
   }, [activeTab]);
 
   useEffect(() => {

@@ -10,6 +10,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Focus, Pause, Play, Volume2, VolumeX } from 'lucide-react';
 import type { EmoteClockState, EmoteData } from './emote';
+import { isViewerVisible } from './emote';
 
 const ACCENT = '#facc15';
 
@@ -49,7 +50,7 @@ export function EmoteAudio({ src, clock, data, volume }: {
           const t = Math.max(0, Math.min((c.time / Math.max(1, data.numFrames)) * audio.duration, audio.duration));
           try { audio.currentTime = t; } catch { /* not seekable yet */ }
         }
-      } else if (c.playing) {
+      } else if (c.playing && isViewerVisible()) {
         // Animation wrapped (time jumped back near 0) — restart the music.
         if (c.time < lastTime - 1 && !audio.paused) {
           audio.currentTime = 0;

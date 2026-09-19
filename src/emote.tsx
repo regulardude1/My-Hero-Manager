@@ -313,6 +313,13 @@ export interface EmoteClockState {
 
 export const createEmoteClock = (): EmoteClockState => ({ time: 0, playing: true, scrubbing: false });
 
+/// The emote viewer tab stays mounted (hidden via CSS) when you switch tabs,
+/// so playback must be gated on this flag: the render loop and the emote audio
+/// both pause while the viewer is not on screen, and resume when it is.
+let viewerVisible = true;
+export const setViewerVisible = (v: boolean) => { viewerVisible = v; };
+export const isViewerVisible = () => viewerVisible;
+
 // ---------- presentation helpers ----------
 
 /// Pure attachment/utility bones (they overlap other bones or dangle to the
@@ -468,7 +475,7 @@ export function EmoteSkeleton({ data, clock }: { data: EmoteData; clock: { curre
 
   useFrame((_, delta) => {
     const c = clock.current;
-    if (c.playing && !c.scrubbing) {
+    if (c.playing && !c.scrubbing && isViewerVisible()) {
       // Clamp delta so a backgrounded tab / long frame doesn't jump the animation.
       c.time = (c.time + Math.min(delta, 0.1) * data.fps) % data.numFrames;
     }
