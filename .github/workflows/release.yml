@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Build app + NSIS installer
+        run: npm run tauri build -- --bundles nsis
+
+      - name: Stage portable folder
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $TAG.TrimStart('v')
+          $stage = "portable/My Hero Manager $version"
+          New-Item -ItemType Directory -Force $stage | Out-Null
+          Copy-Item "src-tauri/target/release/mh-manager.exe" $stage
+          Copy-Item -Recurse "tools" "$stage/tools"
+
+      - name: Create portable zip
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $TAG.TrimStart('v')
+          & "C:\Program Files\7-Zip\7z.exe" a -tzip "MyHeroManager_${version}_portable_x64.zip" "portable/My Hero Manager $version"
+
+      - name: Rename installer asset
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          $version = $TAG.TrimStart('v')
+          Copy-Item "src-tauri/target/release/bundle/nsis/My Hero Manager_${version}_x64-setup.exe" "MyHeroManager_${version}_x64-setup.exe"
+
+      - name: Publish GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            MyHeroManager_*_setup.exe
+            MyHeroManager_*_portable_x64.zip
+          generate_release_notes: true
