@@ -52,6 +52,13 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            MyHeroManager_*_setup.exe
+            MyHeroManager_*-setup.exe
             MyHeroManager_*_portable_x64.zip
           generate_release_notes: true
+
+      - name: Verify release assets
+        shell: pwsh
+        run: |
+          $assets = gh release view "${{ github.ref_name }}" --json assets -q '.assets[].name'
+          if ($assets -notlike '*-setup.exe') { throw 'Installer missing from published release!' }
+          if ($assets -notlike '*_portable_x64.zip') { throw 'Portable zip missing from published release!' }
