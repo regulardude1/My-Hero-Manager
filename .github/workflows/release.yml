@@ -27,10 +27,8 @@ jobs:
 
       - name: Stage portable folder
         shell: pwsh
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
-          $version = $TAG.TrimStart('v')
+          $version = "${{ github.ref_name }}".TrimStart('v')
           $stage = "portable/My Hero Manager $version"
           New-Item -ItemType Directory -Force $stage | Out-Null
           Copy-Item "src-tauri/target/release/mh-manager.exe" $stage
@@ -38,18 +36,14 @@ jobs:
 
       - name: Create portable zip
         shell: pwsh
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
-          $version = $TAG.TrimStart('v')
+          $version = "${{ github.ref_name }}".TrimStart('v')
           & "C:\Program Files\7-Zip\7z.exe" a -tzip "MyHeroManager_${version}_portable_x64.zip" "portable/My Hero Manager $version"
 
       - name: Rename installer asset
         shell: pwsh
-        env:
-          TAG: ${{ github.ref_name }}
         run: |
-          $version = $TAG.TrimStart('v')
+          $version = "${{ github.ref_name }}".TrimStart('v')
           $installer = Get-ChildItem "src-tauri/target/release/bundle/nsis/*_x64-setup.exe" | Select-Object -First 1
           if (-not $installer) { throw "No NSIS installer found in src-tauri/target/release/bundle/nsis/" }
           Copy-Item $installer.FullName "MyHeroManager_${version}_x64-setup.exe"
