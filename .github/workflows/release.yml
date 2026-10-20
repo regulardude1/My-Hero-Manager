@@ -59,6 +59,7 @@ jobs:
       - name: Verify release assets
         shell: pwsh
         run: |
+          $env:GH_TOKEN = "${{ github.token }}"
           $assets = gh release view "${{ github.ref_name }}" --json assets -q '.assets[].name'
-          if ($assets -notlike '*-setup.exe') { throw 'Installer missing from published release!' }
-          if ($assets -notlike '*_portable_x64.zip') { throw 'Portable zip missing from published release!' }
+          if (-not ($assets -like '*-setup.exe')) { throw 'Installer missing from published release!' }
+          if (-not ($assets -like '*_portable_x64.zip')) { throw 'Portable zip missing from published release!' }
