@@ -257,33 +257,44 @@ export default function SkinSwapper({ mods, gamePath, onModUpdated }: { mods: Mo
   const isCurrentSlot = (mod: Mod, slotId: string) => {
     if (!mod.modified_files) return false;
 
+    // repak/Unreal tools can return either slash style on Windows. Normalize
+    // first so slot detection does not depend on how the pak listing happened
+    // to spell its paths.
+    const normalizedFiles = mod.modified_files.map(f => f.replace(/\\/g, "/"));
+
     // Only the actual costume mesh counts. Skeleton / PhysicsAsset companion
     // files always keep their "Default" names and paths even after a swap,
     // so counting them would pin the badge to the old slot forever.
-    const meshFiles = mod.modified_files.filter(f =>
+    const meshFiles = normalizedFiles.filter(f =>
       /\/mesh\//i.test(f) && !/physicsasset|skeleton/i.test(f)
     );
 
-    // 1. Name-based (most reliable): the mesh name embeds the slot token.
-    //    sk_ch102_spd1_00 -> Sp_D1_00 | sk_ch102_default_00 -> Default
-    //    Textures/materials follow the same convention (T_Ch102_SpD1_00_...)
-    let slotToken = slotId.toLowerCase();
-    const m = slotId.match(/^([A-Za-z]{2})_(.+)$/);
-    if (slotId !== "Default" && m) slotToken = (m[1] + m[2]).toLowerCase();
-    if (slotId === "Default") slotToken = "default_00";
-    if (meshFiles.some(f => f.toLowerCase().includes(slotToken))) return true;
+    const lowerSlot = slotId.toLowerCase();
+    const compactSlot = lowerSlot.replace(/[_/]/g, "");
+    const slotParts = lowerSlot.split("_").filter(Boolean);
 
-    // 2. Path-based fallback (e.g. a mesh named generically inside the slot folder)
-    if (slotId === "Default") {
-      return meshFiles.some(f => f.toLowerCase().includes("/model/default/mesh/"));
-    }
+    return meshFiles.some(file => {
+      const lower = file.toLowerCase();
+      const filename = lower.split("/").pop() ?? lower;
 
-    const searchWithUnderscore = `/Model/${slotId}/Mesh/`.toLowerCase();
-    const searchWithSlash = `/Model/${slotId.replace('_', '/')}/Mesh/`.toLowerCase();
+      // Prefer the actual folder structure: Model/Sp/D1_00, Model/Eq/D1_00,
+      // etc. This also works when the mesh itself has a generic name.
+      if (lowerSlot === "default") {
+        if (/\/model\/default\/mesh\//i.test(lower)) return true;
+      } else {
+        const folderPath = `/model/${slotParts.join("/")}/mesh/`;
+        if (lower.includes(folderPath)) return true;
+      }
 
-    return meshFiles.some(f =>
-      f.toLowerCase().includes(searchWithUnderscore) || f.toLowerCase().includes(searchWithSlash)
-    );
+      // Fall back to the mesh asset name. UE asset names commonly flatten
+      // Sp/D1_00 into SpD1_00, while some mods retain the underscore.
+      if (lowerSlot === "default") {
+        return /(?:^|[_-])default(?:[_-]?00)?(?:[._-]|$)/i.test(filename);
+      }
+      const underscoreToken = lowerSlot.replace(/\//g, "_");
+      const compactToken = compactSlot;
+      return filename.includes(underscoreToken) || filename.includes(compactToken);
+    });
   };
 
   return (

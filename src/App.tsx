@@ -13,7 +13,7 @@ import { useTheme, THEMES } from "./theme";
 import { DragEndEvent } from '@dnd-kit/core';
 import { arrayMove } from '@dnd-kit/sortable';
 import { Component, ReactNode } from 'react';
-import { Mod, ContextMenuState, ModFolder, getBaseFilename, extractSlotFromMod } from "./utils/mods";
+import { Mod, ContextMenuState, ModFolder, getBaseFilename, extractSlotFromMod, getModCostumeTargetIds } from "./utils/mods";
 import { NavItem, FilterItem, RenameFolderInput } from "./components/ui";
 import { ModDetailsModal } from "./components/ModDetailsModal";
 import { useCollections } from "./hooks/useCollections";
@@ -705,25 +705,6 @@ function App() {
       return null;
     };
 
-    const getIdentifiers = (files: string[]) => {
-      const identifiers = new Set<string>();
-      files.forEach(file => {
-        let charPrefix = "";
-        const charMatch = file.match(/\/Character\/(?:Player\/|Enemy\/|Mob\/)?([^\/]+)\//i);
-        if (charMatch) {
-            charPrefix = `${charMatch[1].toUpperCase()}_`;
-        }
-
-        const costumeMatch = file.match(/\/Model\/(.+?)\/(?:Mesh|Mat|Tex|Animation|Physics)\//i);
-        if (costumeMatch) identifiers.add(charPrefix + "Costume_" + costumeMatch[1]);
-        const emoteMatch = file.match(/(?:em|EmotionAct|Emote)[_-]?(\d{2,3})/i);
-        if (emoteMatch) identifiers.add(charPrefix + "Emote_" + emoteMatch[1]);
-        const voiceMatch = file.match(/(?:vo|Voice|Cue)[_-]?(\d{2,3})/i);
-        if (voiceMatch) identifiers.add(charPrefix + "Voice_" + voiceMatch[1]);
-      });
-      return identifiers;
-    };
-
     for (let i = 0; i < activeMods.length; i++) {
       for (let j = i + 1; j < activeMods.length; j++) {
         const mod = activeMods[i];
@@ -731,19 +712,12 @@ function App() {
         let isConflict = false;
 
         if (mod.modified_files && m.modified_files && mod.modified_files.length > 0 && m.modified_files.length > 0) {
-          const identifiers1 = getIdentifiers(mod.modified_files);
-          const identifiers2 = getIdentifiers(m.modified_files);
-
-          const getPrimaryIdentifiers = (ids: Set<string>) => {
-            const specific = Array.from(ids).filter(c => c !== "Default");
-            return specific.length > 0 ? specific : ["Default"];
-          };
-
-          const primary1 = getPrimaryIdentifiers(identifiers1);
-          const primary2 = getPrimaryIdentifiers(identifiers2);
-
-          const primaryIntersect = primary1.filter(c => primary2.includes(c));
-          if (primaryIntersect.length === 0) continue;
+          // Use the concrete Character/Model target instead of display names.
+          // This lets two mods targeting the same costume be recognized even
+          // when they replace different assets within that costume.
+          const targets1 = getModCostumeTargetIds(mod);
+          const targets2 = getModCostumeTargetIds(m);
+          if (targets1.length > 0 && targets2.length > 0 && !targets1.some(t => targets2.includes(t))) continue;
 
           const modFilesSet = new Set(m.modified_files);
           const intersect = mod.modified_files.filter(file => {
@@ -1725,7 +1699,23 @@ function App() {
                        Clear the character/category scan cache. Your mods will NOT be deleted — the app will just re-detect character and category info on next load.
                      </p>
                      
-                     <button 
+                     <button
+                       onClick={async () => {
+                         if (await showConfirm("Refresh the mod scan now? Your mods, settings, and preview caches will NOT be deleted. Character/category information will be rescanned.")) {
+                           try {
+                             await invoke("refresh_mod_cache");
+                             await showAlert("Mod scan cache refreshed. Rescanning your mods now...");
+                             fetchMods();
+                           } catch (e) {
+                             await showAlert("Error refreshing mod scan cache: " + e);
+                           }
+                         }
+                       }}
+                       className="px-6 py-2.5 bg-hero-accent/10 hover:bg-hero-accent/20 text-hero-accent font-bold border border-hero-accent/30 rounded-md transition-colors flex items-center gap-2 mb-3"
+                     >
+                       <Shuffle size={16} /> Refresh Mod Scan
+                     </button>
+                     <button
                        onClick={async () => {
                          if (await showConfirm("Clear the scan cache? Your mods will NOT be deleted. The app will re-detect character/category info on next load.")) {
                             const keysToPreserve = [

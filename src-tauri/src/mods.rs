@@ -3,6 +3,7 @@ use std::path::Path;
 use serde::{Deserialize, Serialize};
 use std::process::Command;
 use std::collections::HashSet;
+use std::io::{BufRead, BufReader};
 use std::os::windows::process::CommandExt;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use crate::util::{get_data_dir, get_tools_dir, get_characters_map, load_cache, save_cache};
@@ -62,7 +63,9 @@ pub fn scan_pak_for_character_and_emote(pak_path: &Path) -> (String, String, Vec
     let aes_key = "0x332F41B1130F125444A35F420EC6D05EA3E27A972A36DAD90C83FC6958D941C7";
     let output = Command::new(&umodel_exe)
         .arg("-list")
-        .arg("-game=ue4.27")
+        // UE Viewer accepts UE4.25+ as the override tag; using ue4.27 here is
+        // parsed as the invalid tag "ue4" by the bundled build.
+        .arg("-game=ue4.25+")
         .arg(format!("-path={}", temp_dir.to_string_lossy()))
         .arg(format!("-aes={}", aes_key))
         .arg("*")
@@ -170,11 +173,34 @@ pub fn scan_pak_for_character_and_emote(pak_path: &Path) -> (String, String, Vec
 
     let mut modified_files = Vec::new();
     for line in out_str.lines() {
+        // Depending on the UE Viewer build/options, -list output can be either
+        // "Loading package: ..." or a plain package path. The old parser only
+        // handled the former, which left modified_files empty and caused the
+        // UI to show "No detailed file information available.".
         if let Some(path) = line.strip_prefix("Loading package: ") {
             let clean_path = path.split(" Ver:").next().unwrap_or(path).trim();
-            modified_files.push(clean_path.to_string());
+            if !clean_path.is_empty() {
+                modified_files.push(clean_path.to_string());
+            }
+            continue;
+        }
+
+        let lower = line.to_lowercase();
+        if let Some(start) = lower.find("character/") {
+            let candidate = line[start..]
+                .split_whitespace()
+                .next()
+                .unwrap_or("")
+                .trim_end_matches(|c: char| matches!(c, ')' | ',' | ':' | ';'));
+            if candidate.to_lowercase().contains("/model/")
+                && candidate.to_lowercase().contains("/ch")
+            {
+                modified_files.push(candidate.to_string());
+            }
         }
     }
+    modified_files.sort();
+    modified_files.dedup();
 
     eprintln!("[scan_pak] Result: character={}, category={}, modified_files={}", base_char, category, modified_files.len());
     (base_char, category.to_string(), modified_files)
@@ -267,9 +293,9 @@ pub async fn get_local_mods(game_path: Option<String>) -> Result<Vec<ModInfo>, S
                         for pak_path in &target_pak_paths {
                             let clean_path = pak_path.to_string_lossy().replace(r#"\\?\"#, "").to_lowercase();
                             let cache_key = if let Ok(meta) = fs::metadata(pak_path) {
-                                format!("v6|{}|{}|{}", clean_path, meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH).duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), meta.len())
+                                format!("v7|{}|{}|{}", clean_path, meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH).duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), meta.len())
                             } else {
-                                format!("v6|{}", clean_path)
+                                format!("v7|{}", clean_path)
                             };
                             
                             let mut cached_entry = cache.get(&cache_key);
@@ -297,7 +323,9 @@ pub async fn get_local_mods(game_path: Option<String>) -> Result<Vec<ModInfo>, S
                                 .unwrap_or(false);
 
                             let (ch, cat, files, _pak_hash) = if let (Some(cached), Some(mod_files)) = (cached_entry, cached_entry.and_then(|c| c.get("modified_files").and_then(|v| v.as_array()))) {
-                                if has_valid_hash {
+                                // An empty modified_files cache is not useful for the
+                                // detailed-file UI. Treat it as stale and rescan it.
+                                if has_valid_hash && !mod_files.is_empty() {
                                     (
                                         cached.get("character").and_then(|v| v.as_str()).unwrap_or("").to_string(),
                                         cached.get("category").and_then(|v| v.as_str()).unwrap_or("").to_string(),
@@ -334,13 +362,14 @@ pub async fn get_local_mods(game_path: Option<String>) -> Result<Vec<ModInfo>, S
                                 // to avoid blocking on expensive umodel scan
                                 let modinfo_char = parsed["character"].as_str().unwrap_or("").to_string();
                                 let modinfo_cat = parsed["category"].as_str().unwrap_or("").to_string();
-                                let has_modinfo_data = !modinfo_char.is_empty() && modinfo_char != "Other" && modinfo_char != "All" && modinfo_char != "Unknown";
-                                
-                                if has_modinfo_data {
-                                    // Use modinfo data, skip expensive scan - cache will rebuild next time
-                                    (modinfo_char, modinfo_cat, Vec::new(), String::new())
-                                } else {
-                                    let (ch, cat, files) = scan_pak_for_character_and_emote(pak_path);
+                                {
+                                    // modinfo.json can provide character/category, but it
+                                    // does not contain the internal files needed by the UI.
+                                    // Always scan on a cache miss (or stale empty cache) and
+                                    // fall back to modinfo values if the scan cannot identify them.
+                                    let (scanned_ch, scanned_cat, files) = scan_pak_for_character_and_emote(pak_path);
+                                    let ch = if !scanned_ch.is_empty() { scanned_ch } else { modinfo_char };
+                                    let cat = if !scanned_cat.is_empty() && scanned_cat != "Other" { scanned_cat } else { modinfo_cat };
                                     let mut hash_str = String::new();
                                     if let Ok(mut file) = fs::File::open(pak_path) {
                                         use sha2::{Sha256, Digest};
@@ -422,9 +451,9 @@ pub async fn get_local_mods(game_path: Option<String>) -> Result<Vec<ModInfo>, S
                                 for pak_path in &target_pak_paths {
                                     let clean_path = pak_path.to_string_lossy().replace(r#"\\?\"#, "").to_lowercase();
                                     let cache_key = if let Ok(meta) = fs::metadata(pak_path) {
-                                        format!("v6|{}|{}|{}", clean_path, meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH).duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), meta.len())
+                                        format!("v7|{}|{}|{}", clean_path, meta.modified().unwrap_or(std::time::SystemTime::UNIX_EPOCH).duration_since(std::time::UNIX_EPOCH).unwrap().as_secs(), meta.len())
                                     } else {
-                                        format!("v6|{}", clean_path)
+                                        format!("v7|{}", clean_path)
                                     };
                                     if let Some(cached) = cache.get(&cache_key) {
                                         if let Some(hash) = cached.get("pak_hash").and_then(|v| v.as_str()) {
@@ -715,6 +744,158 @@ pub fn extract_mod_preview(mod_id: String, folder_path: String) -> Result<String
         }
         fallback
     }
+
+    // Some UE animation exports are enormous (the affected emote is ~1 GB,
+    // 17k+ frames, and 856 joints). Loading that text with fetch().text() and
+    // split() in the WebView creates several GB of transient allocations and
+    // makes Chromium terminate with its 0xe0000008 out-of-memory exception.
+    // Keep the original cache file intact, but create a small evenly sampled
+    // preview animation for the browser. Keep only the first 15 seconds and
+    // sample that window to a bounded number of frames so the browser can play
+    // it without loading the original multi-hundred-MB/GB text asset.
+    fn prepare_emote_anim_preview(anim_path: &Path, cache_dir: &Path) -> Option<std::path::PathBuf> {
+        const MAX_PREVIEW_SECONDS: f64 = 15.0;
+        const MAX_PREVIEW_FRAMES: usize = 450;
+        const LARGE_ANIM_BYTES: u64 = 50 * 1024 * 1024;
+
+        let size = anim_path.metadata().ok()?.len();
+        if size <= LARGE_ANIM_BYTES {
+            return Some(anim_path.to_path_buf());
+        }
+
+        let preview_path = cache_dir.join("emote_preview_15s_v2.md5anim");
+        if let Ok(meta) = preview_path.metadata() {
+            if meta.len() > 0 {
+                return Some(preview_path);
+            }
+        }
+
+        let file = std::fs::File::open(anim_path).ok()?;
+        let reader = BufReader::new(file);
+        let mut lines = reader.lines();
+        let mut header: Vec<String> = Vec::new();
+        let mut hierarchy: Vec<String> = Vec::new();
+        let mut total_frames = 0usize;
+        let mut joint_count = 0usize;
+        let mut frame_rate = 30.0f64;
+        let mut in_hierarchy = false;
+        let mut selected: Vec<Vec<String>> = Vec::new();
+
+        // Read the small header and hierarchy, then stream the frame blocks.
+        // We intentionally never materialize the original file as one String.
+        while let Some(line) = lines.next() {
+            let line = line.ok()?;
+            let trimmed = line.trim();
+            if trimmed.starts_with("numFrames ") {
+                total_frames = trimmed.split_whitespace().nth(1)?.parse().ok()?;
+            } else if trimmed.starts_with("numJoints ") {
+                joint_count = trimmed.split_whitespace().nth(1)?.parse().ok()?;
+            } else if trimmed.starts_with("frameRate ") {
+                frame_rate = trimmed.split_whitespace().nth(1)?.parse().ok()?;
+            }
+
+            if in_hierarchy {
+                hierarchy.push(line.clone());
+                if trimmed == "}" {
+                    in_hierarchy = false;
+                }
+                continue;
+            }
+            if trimmed == "hierarchy {" {
+                in_hierarchy = true;
+                hierarchy.push(line.clone());
+                continue;
+            }
+            if trimmed.starts_with("frame ") && trimmed.ends_with('{') {
+                break;
+            }
+            header.push(line);
+        }
+
+        if total_frames < 1 || joint_count < 1 || hierarchy.is_empty() {
+            return None;
+        }
+
+        let source_duration = total_frames as f64 / frame_rate.max(0.001);
+        let preview_duration = source_duration.min(MAX_PREVIEW_SECONDS);
+        let source_preview_frames = ((preview_duration * frame_rate.max(0.001)).ceil() as usize)
+            .max(1)
+            .min(total_frames);
+        let target = source_preview_frames.min(MAX_PREVIEW_FRAMES);
+        let selected_indices: HashSet<usize> = (0..target)
+            .map(|i| i * (source_preview_frames.saturating_sub(1)) / target.saturating_sub(1).max(1))
+            .collect();
+
+        let mut current_frame = 0usize;
+        let mut current_block: Option<Vec<String>> = None;
+        let mut process_frame_line = |line: String| -> Option<()> {
+            let trimmed = line.trim();
+            if trimmed.starts_with("frame ") && trimmed.ends_with('{') {
+                current_frame = trimmed
+                    .split_whitespace()
+                    .nth(1)?
+                    .parse::<usize>()
+                    .ok()?;
+                if selected_indices.contains(&current_frame) {
+                    current_block = Some(vec![line]);
+                } else {
+                    current_block = None;
+                }
+                return Some(());
+            }
+            if let Some(block) = current_block.as_mut() {
+                block.push(line.clone());
+                if trimmed == "}" {
+                    selected.push(std::mem::take(block));
+                    current_block = None;
+                }
+            }
+            Some(())
+        };
+
+        if let Some(line) = lines.next() {
+            process_frame_line(line.ok()?)?;
+        }
+        for line in lines {
+            process_frame_line(line.ok()?)?;
+        }
+        if selected.is_empty() {
+            return None;
+        }
+
+        let preview_rate = selected.len() as f64 / preview_duration.max(0.001);
+        let mut out = String::new();
+        for line in header {
+            let trimmed = line.trim();
+            if trimmed.starts_with("numFrames ") {
+                out.push_str(&format!("numFrames {}\n", selected.len()));
+            } else if trimmed.starts_with("frameRate ") {
+                out.push_str(&format!("frameRate {:.6}\n", preview_rate));
+            } else {
+                out.push_str(&line);
+                out.push('\n');
+            }
+        }
+        for line in hierarchy {
+            out.push_str(&line);
+            out.push('\n');
+        }
+        for (i, block) in selected.iter().enumerate() {
+            if block.is_empty() { continue; }
+            let mut first = true;
+            for line in block {
+                if first {
+                    out.push_str(&format!("frame {} {{\n", i));
+                    first = false;
+                } else {
+                    out.push_str(line);
+                    out.push('\n');
+                }
+            }
+        }
+        std::fs::write(&preview_path, out).ok()?;
+        Some(preview_path)
+    }
     
     if let Some(cached) = find_gltf(&cache_dir) {
         return Ok(refresh_standalone(cached).to_string_lossy().to_string());
@@ -741,7 +922,9 @@ pub fn extract_mod_preview(mod_id: String, folder_path: String) -> Result<String
         find_largest(&alt_cache, "md5anim", &mut anim);
         if psk.is_some() || anim.is_some() {
             let psk_s = psk.map(|(p, _)| p.to_string_lossy().to_string()).unwrap_or_default();
-            let anim_s = anim.map(|(a, _)| a.to_string_lossy().to_string()).unwrap_or_default();
+            let anim_s = anim
+                .and_then(|(a, _)| prepare_emote_anim_preview(&a, &cache_dir).map(|p| p.to_string_lossy().to_string()))
+                .unwrap_or_default();
             // Audio (emote_audio.ogg) is committed alongside the skeleton at
             // extraction time; caches from before audio support have none.
             let mut audio: Option<(std::path::PathBuf, u64)> = None;
@@ -815,7 +998,7 @@ pub fn extract_mod_preview(mod_id: String, folder_path: String) -> Result<String
     let run_umodel = |temp_pak_dir: &str, fmt_flags: &[&str], with_anim: bool| -> bool {
         let mut cmd = Command::new(&umodel_exe);
         cmd.current_dir(&tools_dir)
-            .arg("-game=ue4.27")
+            .arg("-game=ue4.25+")
             .arg(format!("-path={}", temp_pak_dir))
             .arg(format!("-aes={}", aes_key));
         if !with_anim {
@@ -972,7 +1155,9 @@ pub fn extract_mod_preview(mod_id: String, folder_path: String) -> Result<String
             find_largest(&cache_dir, "md5anim", &mut anim2);
             find_largest(&cache_dir, "ogg", &mut audio2);
             let psk_s = psk2.map(|(p, _)| p.to_string_lossy().to_string()).unwrap_or_default();
-            let anim_s = anim2.map(|(a, _)| a.to_string_lossy().to_string()).unwrap_or_default();
+            let anim_s = anim2
+                .and_then(|(a, _)| prepare_emote_anim_preview(&a, &cache_dir).map(|p| p.to_string_lossy().to_string()))
+                .unwrap_or_default();
             let audio_s = audio2.map(|(a, _)| a.to_string_lossy().to_string()).unwrap_or_default();
             eprintln!("[extract] Emote assets: psk=\"{}\" anim=\"{}\" audio=\"{}\"", psk_s, anim_s, audio_s);
             return Ok(format!("EMOTE::{}|{}|{}", psk_s, anim_s, audio_s));
@@ -1800,6 +1985,13 @@ pub fn clear_mod_cache() -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+/// Invalidate only the character/category scan cache so the next mod load
+/// performs a fresh pak scan without deleting mods, settings, or preview data.
+#[tauri::command]
+pub fn refresh_mod_cache() -> Result<(), String> {
+    clear_mod_cache()
 }
 
 #[tauri::command]

@@ -35,9 +35,14 @@ fn init_dirs(app: &tauri::App) {
     let _ = DATA_DIR.set(data_dir);
 
     if let Ok(res_dir) = app.path().resource_dir() {
-        if res_dir.join("tools").exists() {
-            let _ = TOOLS_DIR.set(res_dir.join("tools"));
-            return;
+        // Portable layout: tools/ sits next to the exe.
+        // Bundled layout: Tauri escapes "../" as "_up_", so installed builds
+        // (NSIS/MSI) ship resources at <exe dir>/_up_/tools.
+        for candidate in [res_dir.join("tools"), res_dir.join("_up_").join("tools")] {
+            if candidate.exists() {
+                let _ = TOOLS_DIR.set(candidate);
+                return;
+            }
         }
     }
 
@@ -140,6 +145,7 @@ pub fn run() {
             mods::merge_mods,
             mods::get_characters,
             mods::clear_mod_cache,
+            mods::refresh_mod_cache,
             install::prepare_import,
             mods::save_folders_json,
             mods::load_folders_json,

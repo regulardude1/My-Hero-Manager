@@ -111,8 +111,11 @@ export function parseMd5animFrames(text: string, boneNames: string[], numFrames:
   const lines = text.split(/\r?\n/);
 
   // Hierarchy: "name" parent base offset, one line per joint, until '}'.
+  // Large UE rigs can have hundreds/thousands of joints, so the hierarchy may
+  // begin well beyond the first 60 lines. The backend preview is intentionally
+  // compact, but its hierarchy still needs to be scanned in full.
   let hi = -1;
-  for (let i = 0; i < Math.min(lines.length, 60); i++) {
+  for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim().startsWith('hierarchy')) { hi = i; break; }
   }
   if (hi < 0) throw new Error('No hierarchy block in .md5anim');
@@ -198,7 +201,7 @@ export function buildEmoteAnimOnly(animText: string): EmoteData {
 
   const lines = animText.split(/\r?\n/);
   let hi = -1;
-  for (let i = 0; i < Math.min(lines.length, 60); i++) {
+  for (let i = 0; i < lines.length; i++) {
     if (lines[i].trim().startsWith('hierarchy')) { hi = i; break; }
   }
   if (hi < 0) throw new Error('No hierarchy block in .md5anim');

@@ -90,10 +90,17 @@ export default function ModMerger({ mods, gamePath, onModsChanged }: { mods: Mod
   }, [characterId, gamePath]);
 
   const isCostumeOverwritten = (costumeId: string) => {
-    const searchString = costumeId === "Default" ? "/Model/Default/" : `/Model/${costumeId}/`;
-    return selectedModObjects.some(mod => 
-      mod.modified_files && mod.modified_files.some(file => file.includes(searchString))
-    );
+    const slot = costumeId.toLowerCase();
+    const parts = slot.split("_").filter(Boolean);
+    const compact = slot.replace(/[_/]/g, "");
+    return selectedModObjects.some(mod => mod.modified_files?.some(rawFile => {
+      const file = rawFile.replace(/\\/g, "/").toLowerCase();
+      if (!/\/mesh\//i.test(file) || /physicsasset|skeleton/i.test(file)) return false;
+      if (slot === "default") return /\/model\/default\/mesh\//i.test(file);
+      const folder = `/model/${parts.join("/")}/mesh/`;
+      const filename = file.split("/").pop() ?? file;
+      return file.includes(folder) || filename.includes(slot) || filename.includes(compact);
+    }));
   };
 
   const handleMerge = async () => {
